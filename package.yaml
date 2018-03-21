@@ -29,6 +29,7 @@ dependencies:
   - gi-gdkpixbuf >= 2.0.15
   - gi-glib
   - gi-gtk >= 3.0.21
+  - hslogger
   - mtl
   - status-notifier-item
   - text

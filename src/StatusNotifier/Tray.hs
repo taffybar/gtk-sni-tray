@@ -17,6 +17,7 @@ import           Data.Maybe
 import qualified Data.Text as T
 import           Foreign.Ptr
 import qualified GI.DbusmenuGtk3.Objects.Menu as DM
+import qualified GI.GLib as GLib
 import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
 import           GI.Gdk.Enums
@@ -25,13 +26,13 @@ import           GI.GdkPixbuf.Callbacks
 import           GI.GdkPixbuf.Enums
 import           GI.GdkPixbuf.Objects.Pixbuf
 import           GI.GdkPixbuf.Structs.Pixdata
-import qualified GI.GLib as GLib
 import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
 import qualified GI.Gtk.Objects.Box as Gtk
 import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
+import           System.Log.Logger
 import           Text.Printf
 
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
@@ -73,8 +74,23 @@ data ItemContext = ItemContext
   , contextButton :: Gtk.Button
   }
 
-buildTray = do
+data TrayParams = TrayParams
+  { trayLogger :: Logger }
+
+buildTrayWithHost :: IO Gtk.Box
+buildTrayWithHost = do
   client <- connectSession
+  logger <- getRootLogger
+  (tray, updateHandler) <- buildTray TrayParams { trayLogger = logger }
+  _ <- join $ build defaultParams
+       { uniqueIdentifier = "taffybar"
+       , handleUpdate = updateHandler
+       , dbusClient = Just client
+       }
+  return tray
+
+buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
+buildTray TrayParams { trayLogger = logger } = do
   trayBox <- Gtk.boxNew Gtk.OrientationHorizontal 0
   widgetMap <- MV.newMVar Map.empty
 
@@ -83,12 +99,20 @@ buildTray = do
       updateHandler ItemAdded
                     info@ItemInfo { menuPath = pathForMenu
                                   , itemServiceName = serviceName
+                                  , itemServicePath = servicePath
                                   } =
         do
+          let serviceNameStr = coerce serviceName
+              servicePathStr = coerce servicePath :: String
+              serviceMenuPathStr = coerce pathForMenu
+              logText = printf "Adding widget for %s - %s."
+                        serviceNameStr servicePathStr
+
+          logL logger INFO logText
           pixBuf <- getPixBufFromInfo info
           image <- Gtk.imageNewFromPixbuf (Just pixBuf)
           button <- Gtk.buttonNew
-          menu <- DM.menuNew (T.pack $ coerce serviceName) (T.pack $ coerce pathForMenu)
+          menu <- DM.menuNew (T.pack serviceNameStr) (T.pack serviceMenuPathStr)
 
           Gtk.containerAdd button image
           Gtk.widgetShowAll button
@@ -109,11 +133,11 @@ buildTray = do
           MV.modifyMVar_ widgetMap $ return . (Map.insert serviceName context)
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
-        = putStrLn "here" >> getContext name >>= removeWidget
-        where removeWidget Nothing = putStrLn "Tried to remove widget for which we have no icon"
+        = getContext name >>= removeWidget
+        where removeWidget Nothing =
+                logL logger INFO "Attempt to remove widget with unrecognized service name."
               removeWidget (Just (ItemContext { contextButton = widgetToRemove })) =
                 do
-                  putStrLn "removing widget"
                   Gtk.containerRemove trayBox widgetToRemove
                   MV.modifyMVar_ widgetMap $ return . (Map.delete name)
 
@@ -123,21 +147,15 @@ buildTray = do
                                  , iconThemePath = mpath
                                  , iconPixmaps = pixmaps
                                  } = do
-        -- XXX: Fix me (the pattern match in the settting)
         themeForIcon <- fromMaybe iconThemeGetDefault $ getThemeWithDefaultFallbacks <$> mpath
         mpixBuf <- (getIconPixbufByName 30 (T.pack name) themeForIcon)
         let getFromPixmaps (w, h, p) = getIconPixbufFromByteString w h p
+        -- XXX: Fix me: don't use head here
         maybe (getFromPixmaps (head pixmaps)) return mpixBuf
 
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
              updateHandler updateType info >> return False
 
-
-  _ <- join $ build defaultParams
-       { uniqueIdentifier = "taffybar"
-       , handleUpdate = uiUpdateHandler
-       , dbusClient = Just client
-       }
-  return trayBox
+  return (trayBox, uiUpdateHandler)
 
