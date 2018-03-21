@@ -32,6 +32,7 @@ import qualified GI.Gtk.Objects.Box as Gtk
 import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
+import qualified StatusNotifier.Item.Client as IC
 import           StatusNotifier.Util
 import           System.Directory
 import           System.Log.Logger
@@ -84,29 +85,38 @@ getIconPixbufFromByteString width height byteString = do
 
 data ItemContext = ItemContext
   { contextInfo :: ItemInfo
-  , contextMenu :: DM.Menu
+  , contextMenu :: Maybe DM.Menu
   , contextImage :: Gtk.Image
   , contextButton :: Gtk.EventBox
   }
 
 data TrayParams = TrayParams
-  { trayLogger :: Logger }
+  { trayLogger :: Logger
+  , trayClient :: Client
+  }
 
-buildTrayWithHost :: IO Gtk.Box
+buildTrayWithHost :: IO Gtk.Widget
 buildTrayWithHost = do
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
-  (tray, updateHandler) <- buildTray TrayParams { trayLogger = defaultTrayLogger }
+  (tray, updateHandler) <- buildTray
+                           TrayParams
+                           { trayLogger = defaultTrayLogger
+                           , trayClient = client
+                           }
   _ <- join $ build defaultParams
        { uniqueIdentifier = printf "standalone-%s" $ show pid
        , handleUpdate = updateHandler
        , dbusClient = Just client
        }
-  return tray
+  widget <- Gtk.toWidget tray
+  return widget
 
 buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
-buildTray TrayParams { trayLogger = logger } = do
+buildTray TrayParams { trayLogger = logger
+                     , trayClient = client
+                     } = do
   logL logger INFO "Building tray"
 
   trayBox <- Gtk.boxNew Gtk.OrientationHorizontal 0
@@ -122,7 +132,7 @@ buildTray TrayParams { trayLogger = logger } = do
         do
           let serviceNameStr = coerce serviceName
               servicePathStr = coerce servicePath :: String
-              serviceMenuPathStr = coerce pathForMenu
+              serviceMenuPathStr = coerce <$> pathForMenu
               logText = printf "Adding widget for %s - %s."
                         serviceNameStr servicePathStr
 
@@ -131,7 +141,7 @@ buildTray TrayParams { trayLogger = logger } = do
           pixBuf <- getPixBufFromInfo info
           image <- Gtk.imageNewFromPixbuf pixBuf
           button <- Gtk.eventBoxNew
-          menu <- DM.menuNew (T.pack serviceNameStr) (T.pack serviceMenuPathStr)
+          maybeMenu <- DM.menuNew (T.pack serviceNameStr) . T.pack <<$>> serviceMenuPathStr
 
           Gtk.containerAdd button image
           Gtk.widgetShowAll button
@@ -139,13 +149,16 @@ buildTray TrayParams { trayLogger = logger } = do
 
           let context =
                 ItemContext { contextInfo = info
-                            , contextMenu = menu
+                            , contextMenu = maybeMenu
                             , contextImage = image
                             , contextButton = button
                             }
-              popupItemMenu =
+              popupItemForMenu menu =
                 Gtk.menuPopupAtWidget menu image
-                   GravitySouthWest GravityNorthWest Nothing >> return False
+                   GravitySouthWest GravityNorthWest Nothing
+              popupItemMenu =
+                maybe activateItem popupItemForMenu maybeMenu >> return False
+              activateItem = void $ IC.activate client serviceName servicePath 0 0
 
           Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
 
@@ -173,18 +186,24 @@ buildTray TrayParams { trayLogger = logger } = do
 
       updateHandler _ _ = return ()
 
-      getPixBufFromInfo ItemInfo { iconName = name
-                                 , iconThemePath = mpath
-                                 , iconPixmaps = pixmaps
-                                 } = do
+      logItemInfo info message =
+        logL logger INFO $ printf "%s - %s pixmap count: %s" message
+               (show $ info { iconPixmaps = []})
+               (show $ length $ iconPixmaps info)
+
+      getPixBufFromInfo info@ItemInfo { iconName = name
+                                      , iconThemePath = mpath
+                                      , iconPixmaps = pixmaps
+                                      } = do
+        logItemInfo info "Getting pixbuf"
         themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks mpath
         -- TODO: Make icon size configurable
         mpixBuf <- getIconPixbufByName 30 (T.pack name) themeForIcon
         let getFromPixmaps (w, h, p) =
-              if BS.length p > 0
+              if BS.length p == 0
               then Nothing
               else Just $ getIconPixbufFromByteString w h p
-        if isJust mpixBuf
+        if length pixmaps == 0
         then return mpixBuf
         else sequenceA $ listToMaybe pixmaps >>= getFromPixmaps
 
