@@ -129,7 +129,7 @@ buildTray TrayParams { trayLogger = logger } = do
           logL logger INFO logText
 
           pixBuf <- getPixBufFromInfo info
-          image <- Gtk.imageNewFromPixbuf (Just pixBuf)
+          image <- Gtk.imageNewFromPixbuf pixBuf
           button <- Gtk.eventBoxNew
           menu <- DM.menuNew (T.pack serviceNameStr) (T.pack serviceMenuPathStr)
 
@@ -164,7 +164,12 @@ buildTray TrayParams { trayLogger = logger } = do
         getContext name >>= updateIcon
         where updateIcon Nothing = updateHandler ItemAdded info
               updateIcon (Just ItemContext { contextImage = image } ) =
-                getPixBufFromInfo info >>= Gtk.imageSetFromPixbuf image . Just
+                getPixBufFromInfo info >>=
+                                  let handlePixbuf mpbuf =
+                                        if isJust mpbuf
+                                        then Gtk.imageSetFromPixbuf image mpbuf
+                                        else updateHandler ItemRemoved info
+                                  in handlePixbuf
 
       updateHandler _ _ = return ()
 
@@ -175,9 +180,13 @@ buildTray TrayParams { trayLogger = logger } = do
         themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks mpath
         -- TODO: Make icon size configurable
         mpixBuf <- getIconPixbufByName 30 (T.pack name) themeForIcon
-        let getFromPixmaps (w, h, p) = getIconPixbufFromByteString w h p
-        -- XXX: Fix me: don't use head here
-        maybe (getFromPixmaps (head pixmaps)) return mpixBuf
+        let getFromPixmaps (w, h, p) =
+              if BS.length p > 0
+              then Nothing
+              else Just $ getIconPixbufFromByteString w h p
+        if isJust mpixBuf
+        then return mpixBuf
+        else sequenceA $ listToMaybe pixmaps >>= getFromPixmaps
 
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
