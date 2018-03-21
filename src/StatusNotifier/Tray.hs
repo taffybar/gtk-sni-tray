@@ -130,16 +130,16 @@ buildTray TrayParams { trayLogger = logger } = do
 
           Gtk.onButtonClicked button popupItemMenu
 
-          MV.modifyMVar_ widgetMap $ return . (Map.insert serviceName context)
+          MV.modifyMVar_ widgetMap $ return . Map.insert serviceName context
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget
         where removeWidget Nothing =
                 logL logger INFO "Attempt to remove widget with unrecognized service name."
-              removeWidget (Just (ItemContext { contextButton = widgetToRemove })) =
+              removeWidget (Just ItemContext { contextButton = widgetToRemove }) =
                 do
                   Gtk.containerRemove trayBox widgetToRemove
-                  MV.modifyMVar_ widgetMap $ return . (Map.delete name)
+                  MV.modifyMVar_ widgetMap $ return . Map.delete name
 
       updateHandler _ _ = return ()
 
@@ -147,9 +147,9 @@ buildTray TrayParams { trayLogger = logger } = do
                                  , iconThemePath = mpath
                                  , iconPixmaps = pixmaps
                                  } = do
-        themeForIcon <- fromMaybe iconThemeGetDefault $ getThemeWithDefaultFallbacks <$> mpath
+        themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks mpath
         -- TODO: Make icon size configurable
-        mpixBuf <- (getIconPixbufByName 30 (T.pack name) themeForIcon)
+        mpixBuf <- getIconPixbufByName 30 (T.pack name) themeForIcon
         let getFromPixmaps (w, h, p) = getIconPixbufFromByteString w h p
         -- XXX: Fix me: don't use head here
         maybe (getFromPixmaps (head pixmaps)) return mpixBuf
