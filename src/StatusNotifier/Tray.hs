@@ -148,6 +148,7 @@ buildTray TrayParams { trayLogger = logger } = do
                                  , iconPixmaps = pixmaps
                                  } = do
         themeForIcon <- fromMaybe iconThemeGetDefault $ getThemeWithDefaultFallbacks <$> mpath
+        -- TODO: Make icon size configurable
         mpixBuf <- (getIconPixbufByName 30 (T.pack name) themeForIcon)
         let getFromPixmaps (w, h, p) = getIconPixbufFromByteString w h p
         -- XXX: Fix me: don't use head here
