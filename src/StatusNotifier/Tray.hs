@@ -33,6 +33,7 @@ import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
 import           System.Log.Logger
+import           System.Posix.Process
 import           Text.Printf
 
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
@@ -71,7 +72,7 @@ data ItemContext = ItemContext
   { contextInfo :: ItemInfo
   , contextMenu :: DM.Menu
   , contextImage :: Gtk.Image
-  , contextButton :: Gtk.Button
+  , contextButton :: Gtk.EventBox
   }
 
 data TrayParams = TrayParams
@@ -81,9 +82,10 @@ buildTrayWithHost :: IO Gtk.Box
 buildTrayWithHost = do
   client <- connectSession
   logger <- getRootLogger
+  pid <- getProcessID
   (tray, updateHandler) <- buildTray TrayParams { trayLogger = logger }
   _ <- join $ build defaultParams
-       { uniqueIdentifier = "taffybar"
+       { uniqueIdentifier = printf "standalone-%s" $ show pid
        , handleUpdate = updateHandler
        , dbusClient = Just client
        }
@@ -109,9 +111,10 @@ buildTray TrayParams { trayLogger = logger } = do
                         serviceNameStr servicePathStr
 
           logL logger INFO logText
+
           pixBuf <- getPixBufFromInfo info
           image <- Gtk.imageNewFromPixbuf (Just pixBuf)
-          button <- Gtk.buttonNew
+          button <- Gtk.eventBoxNew
           menu <- DM.menuNew (T.pack serviceNameStr) (T.pack serviceMenuPathStr)
 
           Gtk.containerAdd button image
@@ -125,10 +128,10 @@ buildTray TrayParams { trayLogger = logger } = do
                             , contextButton = button
                             }
               popupItemMenu =
-                Gtk.menuPopupAtWidget menu button
-                   GravitySouthWest GravityNorthWest Nothing
+                Gtk.menuPopupAtWidget menu image
+                   GravitySouthWest GravityNorthWest Nothing >> return False
 
-          Gtk.onButtonClicked button popupItemMenu
+          Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
 
           MV.modifyMVar_ widgetMap $ return . Map.insert serviceName context
 
