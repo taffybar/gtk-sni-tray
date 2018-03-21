@@ -32,9 +32,12 @@ import qualified GI.Gtk.Objects.Box as Gtk
 import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
+import           StatusNotifier.Util
 import           System.Log.Logger
 import           System.Posix.Process
 import           Text.Printf
+
+defaultTrayLogger = makeDefaultLogger "StatusNotifier.Tray"
 
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
 
@@ -83,7 +86,7 @@ buildTrayWithHost = do
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
-  (tray, updateHandler) <- buildTray TrayParams { trayLogger = logger }
+  (tray, updateHandler) <- buildTray TrayParams { trayLogger = defaultTrayLogger }
   _ <- join $ build defaultParams
        { uniqueIdentifier = printf "standalone-%s" $ show pid
        , handleUpdate = updateHandler
@@ -93,6 +96,8 @@ buildTrayWithHost = do
 
 buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
 buildTray TrayParams { trayLogger = logger } = do
+  logL logger INFO "Building tray"
+
   trayBox <- Gtk.boxNew Gtk.OrientationHorizontal 0
   widgetMap <- MV.newMVar Map.empty
 
@@ -143,6 +148,12 @@ buildTray TrayParams { trayLogger = logger } = do
                 do
                   Gtk.containerRemove trayBox widgetToRemove
                   MV.modifyMVar_ widgetMap $ return . Map.delete name
+
+      updateHandler IconUpdated info@ItemInfo { itemServiceName = name } =
+        getContext name >>= updateIcon
+        where updateIcon Nothing = updateHandler ItemAdded info
+              updateIcon (Just ItemContext { contextImage = image } ) =
+                getPixBufFromInfo info >>= Gtk.imageSetFromPixbuf image . Just
 
       updateHandler _ _ = return ()
 
