@@ -33,6 +33,7 @@ import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
 import           StatusNotifier.Util
+import           System.Directory
 import           System.Log.Logger
 import           System.Posix.Process
 import           Text.Printf
@@ -60,8 +61,18 @@ getIconPixbufByName :: IsIconTheme it =>  Int32 -> T.Text -> it -> IO (Maybe Pix
 getIconPixbufByName size name themeForIcon = do
   let panelName = T.pack $ printf "%s-panel" name
   hasPanelIcon <- iconThemeHasIcon themeForIcon panelName
-  let targetName = if hasPanelIcon then panelName else name
-  iconThemeLoadIcon themeForIcon targetName size themeLoadFlags
+  hasIcon <- iconThemeHasIcon themeForIcon name
+  if hasIcon || hasPanelIcon
+  then do
+    let targetName = if hasPanelIcon then panelName else name
+    iconThemeLoadIcon themeForIcon targetName size themeLoadFlags
+  else do
+    -- Try to load the icon as a filepath
+    let nameString = T.unpack name
+    fileExists <- doesFileExist nameString
+    if fileExists
+    then Just <$> pixbufNewFromFile name
+    else return Nothing
 
 getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO Pixbuf
 getIconPixbufFromByteString width height byteString = do

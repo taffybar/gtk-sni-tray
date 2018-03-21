@@ -32,6 +32,7 @@ dependencies:
   - hslogger
   - mtl
   - status-notifier-item
+  - directory
   - text
   - transformers
   - unix
