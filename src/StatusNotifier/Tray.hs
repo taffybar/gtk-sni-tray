@@ -141,7 +141,8 @@ buildTray TrayParams { trayLogger = logger
           pixBuf <- getPixBufFromInfo info
           image <- Gtk.imageNewFromPixbuf pixBuf
           button <- Gtk.eventBoxNew
-          maybeMenu <- DM.menuNew (T.pack serviceNameStr) . T.pack <<$>> serviceMenuPathStr
+          maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
+                       T.pack <$> serviceMenuPathStr
 
           Gtk.containerAdd button image
           Gtk.widgetShowAll button
