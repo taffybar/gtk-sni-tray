@@ -7,7 +7,7 @@ packages:
   extra-dep: true
 - location:
     git: https://github.com/IvanMalison/status-notifier-item
-    commit: 211f4759e08d27b2bacf1061cf03d4dc573d0f39
+    commit: b10a6b7cadbc96a0ac1c82397e3e4b4326becfbf
   extra-dep: true
 # - location: ../haskell-dbus
 #   extra-dep: true
