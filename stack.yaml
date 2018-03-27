@@ -2,18 +2,13 @@ resolver: lts-11.0
 packages:
 - .
 - location:
-    git: https://github.com/IvanMalison/haskell-dbus
-    commit: b2f463be3d702e721f1fef41a5e07b45e60ec737
-  extra-dep: true
-- location:
     git: https://github.com/IvanMalison/status-notifier-item
     commit: b10a6b7cadbc96a0ac1c82397e3e4b4326becfbf
   extra-dep: true
-# - location: ../haskell-dbus
-#   extra-dep: true
 # - location: ../status-notifier-item
 #   extra-dep: true
 extra-deps:
+  - dbus-1.0.0
   - spool-0.1
   - gio-0.13.4.1
   - gi-dbusmenugtk3-0.4.1
