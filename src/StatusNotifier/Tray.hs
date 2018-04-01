@@ -110,8 +110,7 @@ buildTrayWithHost = do
        , handleUpdate = updateHandler
        , dbusClient = Just client
        }
-  widget <- Gtk.toWidget tray
-  return widget
+  Gtk.toWidget tray
 
 buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
 buildTray TrayParams { trayLogger = logger
@@ -204,7 +203,7 @@ buildTray TrayParams { trayLogger = logger
               if BS.length p == 0
               then Nothing
               else Just $ getIconPixbufFromByteString w h p
-        if length pixmaps == 0
+        if null pixmaps
         then return mpixBuf
         else sequenceA $ listToMaybe pixmaps >>= getFromPixmaps
 
