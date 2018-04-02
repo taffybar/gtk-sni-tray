@@ -123,6 +123,17 @@ buildTray TrayParams { trayLogger = logger
 
   let getContext name = Map.lookup name <$> MV.readMVar widgetMap
 
+      updateIconFromInfo info@ItemInfo { itemServiceName = name } =
+        getContext name >>= updateIcon
+        where updateIcon Nothing = updateHandler ItemAdded info
+              updateIcon (Just ItemContext { contextImage = image } ) =
+                getPixBufFromInfo info >>=
+                                  let handlePixbuf mpbuf =
+                                        if isJust mpbuf
+                                        then Gtk.imageSetFromPixbuf image mpbuf
+                                        else updateHandler ItemRemoved info
+                                  in handlePixbuf
+
       updateHandler ItemAdded
                     info@ItemInfo { menuPath = pathForMenu
                                   , itemServiceName = serviceName
@@ -173,16 +184,9 @@ buildTray TrayParams { trayLogger = logger
                   Gtk.containerRemove trayBox widgetToRemove
                   MV.modifyMVar_ widgetMap $ return . Map.delete name
 
-      updateHandler IconUpdated info@ItemInfo { itemServiceName = name } =
-        getContext name >>= updateIcon
-        where updateIcon Nothing = updateHandler ItemAdded info
-              updateIcon (Just ItemContext { contextImage = image } ) =
-                getPixBufFromInfo info >>=
-                                  let handlePixbuf mpbuf =
-                                        if isJust mpbuf
-                                        then Gtk.imageSetFromPixbuf image mpbuf
-                                        else updateHandler ItemRemoved info
-                                  in handlePixbuf
+      updateHandler IconUpdated i = updateIconFromInfo i
+
+      updateHandler IconNameUpdated i = updateIconFromInfo i
 
       updateHandler _ _ = return ()
 
@@ -212,4 +216,3 @@ buildTray TrayParams { trayLogger = logger
              updateHandler updateType info >> return False
 
   return (trayBox, uiUpdateHandler)
-
