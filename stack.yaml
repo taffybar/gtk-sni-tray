@@ -1,12 +1,14 @@
 resolver: lts-11.2
 packages:
 - .
-- location:
-    git: https://github.com/IvanMalison/status-notifier-item
-    commit: b10a6b7cadbc96a0ac1c82397e3e4b4326becfbf
-  extra-dep: true
-# - location: ../status-notifier-item
+# - location:
+#     git: https://github.com/IvanMalison/status-notifier-item
+#     commit: b10a6b7cadbc96a0ac1c82397e3e4b4326becfbf
 #   extra-dep: true
+- location: ../status-notifier-item
+  extra-dep: true
+- location: ../gtk-strut
+  extra-dep: true
 extra-deps:
   - dbus-1.0.0
   - spool-0.1

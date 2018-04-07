@@ -93,10 +93,11 @@ data ItemContext = ItemContext
 data TrayParams = TrayParams
   { trayLogger :: Logger
   , trayClient :: Client
+  , trayOrientation :: Gtk.Orientation
   }
 
-buildTrayWithHost :: IO Gtk.Widget
-buildTrayWithHost = do
+buildTrayWithHost :: Gtk.Orientation -> IO Gtk.Widget
+buildTrayWithHost orientation = do
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
@@ -104,6 +105,7 @@ buildTrayWithHost = do
                            TrayParams
                            { trayLogger = defaultTrayLogger
                            , trayClient = client
+                           , trayOrientation = orientation
                            }
   _ <- join $ build defaultParams
        { uniqueIdentifier = printf "standalone-%s" $ show pid
@@ -115,10 +117,11 @@ buildTrayWithHost = do
 buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
 buildTray TrayParams { trayLogger = logger
                      , trayClient = client
+                     , trayOrientation = orientation
                      } = do
   logL logger INFO "Building tray"
 
-  trayBox <- Gtk.boxNew Gtk.OrientationHorizontal 0
+  trayBox <- Gtk.boxNew orientation 0
   widgetMap <- MV.newMVar Map.empty
 
   let getContext name = Map.lookup name <$> MV.readMVar widgetMap

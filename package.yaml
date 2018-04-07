@@ -47,3 +47,5 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - gtk-sni-tray
+    - gtk-strut
+    - optparse-applicative
