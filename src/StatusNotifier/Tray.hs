@@ -96,6 +96,19 @@ data TrayParams = TrayParams
   , trayOrientation :: Gtk.Orientation
   }
 
+buildHostForHandlers :: Client
+                     -> Logger
+                     -> String
+                     -> [(UpdateType -> ItemInfo -> IO ())]
+                     -> IO ()
+buildHostForHandlers client logger unique updateHandlers =
+  void $ join $ build defaultParams
+       { dbusClient = Just client
+       , hostLogger = logger
+       , uniqueIdentifier = unique
+       , handleUpdate = \t i -> mapM_ (\h -> h t i) updateHandlers
+       }
+
 buildTrayWithHost :: Gtk.Orientation -> IO Gtk.Widget
 buildTrayWithHost orientation = do
   client <- connectSession
@@ -108,7 +121,7 @@ buildTrayWithHost orientation = do
                            , trayOrientation = orientation
                            }
   _ <- join $ build defaultParams
-       { uniqueIdentifier = printf "standalone-%s" $ show pid
+       { uniqueIdentifier = printf "-%s" $ show pid
        , handleUpdate = updateHandler
        , dbusClient = Just client
        }

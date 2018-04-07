@@ -1,6 +1,7 @@
 module Main where
 
 import           Control.Monad
+import           DBus.Client
 import           Data.Int
 import           Data.Ratio
 import           Data.Semigroup ((<>))
@@ -8,6 +9,9 @@ import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
 import           StatusNotifier.Tray
+import           System.Log.Logger
+import           System.Posix.Process
+import           Text.Printf
 
 positionP :: Parser StrutPosition
 positionP =
@@ -65,11 +69,16 @@ monitorNumberP = many $
   <> metavar "MONITOR"
   )
 
-buildWindows ::
-  Foldable t =>
-  StrutPosition
-  -> StrutAlignment -> Int32 -> Int32 -> t Int32 -> IO ()
+buildWindows :: StrutPosition
+             -> StrutAlignment
+             -> Int32
+             -> Int32
+             -> [Int32]
+             -> IO ()
 buildWindows pos align size padding monitors = do
+  client <- connectSession
+  logger <- getRootLogger
+  pid <- getProcessID
   let c1 = defaultStrutConfig
            { strutPosition = pos
            , strutAlignment = align
@@ -94,28 +103,34 @@ buildWindows pos align size padding monitors = do
                         { strutHeight = defaultRatio
                         , strutWidth = ExactSize size
                         }
+      buildWithConfig config = do
+        let orientation =
+              case strutPosition config of
+                TopPos -> Gtk.OrientationHorizontal
+                BottomPos -> Gtk.OrientationHorizontal
+                _ -> Gtk.OrientationVertical
+        (tray, updateHandler) <- buildTray TrayParams
+                            { trayLogger = defaultTrayLogger
+                            , trayClient = client
+                            , trayOrientation = orientation
+                            }
+        window <- buildStrutWindow config
+        Gtk.containerAdd window tray
+        Gtk.widgetShowAll window
+        Gtk.onWidgetDestroy window Gtk.mainQuit
+        return updateHandler
       runForMonitor monitor =
         buildWithConfig configBase { strutMonitor = Just monitor }
-  if null monitors
-  then buildWithConfig configBase
-  else mapM_ runForMonitor monitors
+  updateHandlers <-
+    if null monitors
+    then do
+      handler <- buildWithConfig configBase
+      return [handler]
+    else mapM runForMonitor monitors
+  buildHostForHandlers client logger (printf "standalone-%s" $ show pid) updateHandlers
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*> monitorNumberP
-
-buildWithConfig :: StrutConfig -> IO ()
-buildWithConfig config = do
-  let orientation =
-        case strutPosition config of
-          TopPos -> Gtk.OrientationHorizontal
-          BottomPos -> Gtk.OrientationHorizontal
-          _ -> Gtk.OrientationVertical
-  tray <- buildTrayWithHost orientation
-  window <- buildStrutWindow config
-  Gtk.containerAdd window tray
-  Gtk.widgetShowAll window
-  Gtk.onWidgetDestroy window Gtk.mainQuit
-  return ()
 
 main :: IO ()
 main = do
