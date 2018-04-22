@@ -3,44 +3,51 @@ module Main where
 import           Control.Monad
 import           DBus.Client
 import           Data.Int
+import           Data.Maybe
 import           Data.Ratio
 import           Data.Semigroup ((<>))
 import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
+import qualified StatusNotifier.Host.Service as Host
 import           StatusNotifier.Tray
 import           System.Log.Logger
 import           System.Posix.Process
 import           Text.Printf
 
 positionP :: Parser StrutPosition
-positionP =
-  flag' TopPos
+positionP = fromMaybe TopPos <$> optional
+  (   flag' TopPos
   (  long "top"
   <> help "Position the bar at the top of the screen."
-  ) <|> flag' BottomPos
+  )
+  <|> flag' BottomPos
   (  long "bottom"
   <> help "Position the bar at the bottom of the screen."
-  ) <|> flag' LeftPos
+  )
+  <|> flag' LeftPos
   (  long "left"
   <> help "Position the bar on the left side of the screen."
-  ) <|> flag' RightPos
+  )
+  <|> flag' RightPos
   (  long "right"
   <> help "Position the bar on the right side of the screen."
-  ) <|> option auto (value TopPos)
+  ))
 
 alignmentP :: Parser StrutAlignment
-alignmentP =
-  flag' Beginning
+alignmentP = fromMaybe Center <$> optional
+  (   flag' Beginning
   (  long "beginning"
   <> help "Use beginning alignment."
-  ) <|> flag' Center
+  )
+  <|> flag' Center
   (  long "center"
   <> help "Use center alignment."
-  ) <|> flag' End
+  )
+  <|> flag' End
   (  long "end"
   <> help "Use end alignment."
-  ) <|> option auto (value Center)
+  ))
 
 sizeP :: Parser Int32
 sizeP =
@@ -69,16 +76,33 @@ monitorNumberP = many $
   <> metavar "MONITOR"
   )
 
+logP :: Parser Priority
+logP =
+  option auto
+  (  long "log-level"
+  <> short 'l'
+  <> help "Set the log level."
+  <> metavar "LEVEL"
+  <> value WARNING
+  )
+
 buildWindows :: StrutPosition
              -> StrutAlignment
              -> Int32
              -> Int32
              -> [Int32]
+             -> Priority
              -> IO ()
-buildWindows pos align size padding monitors = do
+buildWindows pos align size padding monitors priority = do
+  logger <- getLogger "StatusNotifier"
+  saveGlobalLogger $ setLevel priority logger
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
+  host <- Host.build Host.defaultParams
+    { Host.dbusClient = Just client
+    , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
+    }
   let c1 = defaultStrutConfig
            { strutPosition = pos
            , strutAlignment = align
@@ -109,31 +133,29 @@ buildWindows pos align size padding monitors = do
                 TopPos -> Gtk.OrientationHorizontal
                 BottomPos -> Gtk.OrientationHorizontal
                 _ -> Gtk.OrientationVertical
-        (tray, updateHandler) <- buildTray TrayParams
-                            { trayLogger = defaultTrayLogger
-                            , trayClient = client
-                            , trayOrientation = orientation
-                            }
-        window <- buildStrutWindow config
+        tray <- buildTray TrayParams
+                    { trayClient = client
+                    , trayOrientation = orientation
+                    , trayHost = host
+                    , trayImageSize = Expand
+                    }
+        window <- Gtk.windowNew Gtk.WindowTypeToplevel
+        setupStrutWindow config window
         Gtk.containerAdd window tray
         Gtk.widgetShowAll window
-        Gtk.onWidgetDestroy window Gtk.mainQuit
-        return updateHandler
       runForMonitor monitor =
         buildWithConfig configBase { strutMonitor = Just monitor }
-  updateHandlers <-
-    if null monitors
-    then do
-      handler <- buildWithConfig configBase
-      return [handler]
-    else mapM runForMonitor monitors
-  buildHostForHandlers client logger (printf "standalone-%s" $ show pid) updateHandlers
+  if null monitors
+  then buildWithConfig configBase
+  else mapM_ runForMonitor monitors
 
 parser :: Parser (IO ())
-parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*> monitorNumberP
+parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
+         monitorNumberP <*> logP
 
 main :: IO ()
 main = do
+  -- TODO: start watcher if it doesn't exist
   Gtk.init Nothing
   join $ execParser $ info (parser <**> helper)
                (  fullDesc

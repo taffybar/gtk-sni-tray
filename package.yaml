@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.0.0
+version:             0.2.0.0
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
@@ -15,24 +15,23 @@ category:            System
 
 description:         Please see the README on Github at <https://github.com/IvanMalison/gtk-sni-tray#readme>
 
-dependencies:
-  - base >= 4.7 && < 5
-  - bytestring
-  - containers
-  - dbus >=1.0.0 && <2.0.0
-  - gi-dbusmenugtk3
-  - gi-gdk
-  - gi-gdkpixbuf >= 2.0.15
-  - gi-glib
-  - gi-gtk >= 3.0.21
-  - hslogger
-  - status-notifier-item >=0.1.0.0 && <0.2.0.0
-  - directory
-  - text
-  - transformers
-  - unix
-
 library:
+  dependencies:
+    - base >= 4.7 && < 5
+    - bytestring
+    - containers
+    - dbus >=1.0.0 && <2.0.0
+    - gi-dbusmenugtk3
+    - gi-gdk
+    - gi-gdkpixbuf >= 2.0.15
+    - gi-glib
+    - gi-gtk >= 3.0.21
+    - hslogger
+    - status-notifier-item >=0.2.0.0 && <0.3.0.0
+    - directory
+    - text
+    - transformers
+    - unix
   source-dirs: src
   pkg-config-dependencies:
     - gtk+-3.0
@@ -42,10 +41,16 @@ executables:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
     dependencies:
-    - gtk-sni-tray
-    - gtk-strut
-    - optparse-applicative
+      - base >= 4.7 && < 5
+      - dbus >=1.0.0 && <2.0.0
+      - gi-gtk >= 3.0.21
+      - gtk-sni-tray
+      - gtk-strut
+      - hslogger
+      - optparse-applicative
+      - status-notifier-item >=0.2.0.0 && <0.3.0.0
+      - unix

@@ -8,8 +8,8 @@ packages:
 - location: ../status-notifier-item
   extra-dep: true
 extra-deps:
-  - gtk-strut-0.1.0.0
-  - dbus-1.0.0
+  - gtk-strut-0.1.2.0
+  - dbus-1.0.1
   - spool-0.1
   - gio-0.13.4.1
   - gi-dbusmenugtk3-0.4.1

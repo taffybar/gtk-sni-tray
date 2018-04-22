@@ -4,7 +4,7 @@ module StatusNotifier.Tray where
 import           Control.Concurrent.MVar as MV
 import           Control.Monad
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe (MaybeT(..))
+import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
 import           DBus.Client
 import qualified DBus.Internal.Types as DBusTypes
@@ -12,8 +12,10 @@ import qualified Data.ByteString as BS
 import           Data.ByteString.Unsafe
 import           Data.Coerce
 import           Data.Int
+import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe
+import           Data.Ord
 import qualified Data.Text as T
 import           Foreign.Ptr
 import qualified GI.DbusmenuGtk3.Objects.Menu as DM
@@ -39,7 +41,7 @@ import           System.Log.Logger
 import           System.Posix.Process
 import           Text.Printf
 
-defaultTrayLogger = makeDefaultLogger "StatusNotifier.Tray"
+trayLogger = logM "StatusNotifier.Tray"
 
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
 
@@ -60,6 +62,7 @@ getThemeWithDefaultFallbacks themePath = do
 
 getIconPixbufByName :: IsIconTheme it =>  Int32 -> T.Text -> it -> IO (Maybe Pixbuf)
 getIconPixbufByName size name themeForIcon = do
+  trayLogger DEBUG "Getting Pixbuf from name"
   let panelName = T.pack $ printf "%s-panel" name
   hasPanelIcon <- iconThemeHasIcon themeForIcon panelName
   hasIcon <- iconThemeHasIcon themeForIcon name
@@ -77,6 +80,7 @@ getIconPixbufByName size name themeForIcon = do
 
 getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO Pixbuf
 getIconPixbufFromByteString width height byteString = do
+  trayLogger DEBUG "Getting Pixbuf from bytestring"
   bytes <- bytesNew $ Just byteString
   let bytesPerPixel = 4
       rowStride = width * bytesPerPixel
@@ -84,66 +88,75 @@ getIconPixbufFromByteString width height byteString = do
   pixbufNewFromBytes bytes ColorspaceRgb True sampleBits width height rowStride
 
 data ItemContext = ItemContext
-  { contextInfo :: ItemInfo
+  { contextName :: DBusTypes.BusName
   , contextMenu :: Maybe DM.Menu
   , contextImage :: Gtk.Image
   , contextButton :: Gtk.EventBox
   }
 
+data TrayImageSize = Expand | TrayImageSize Int32
+
 data TrayParams = TrayParams
-  { trayLogger :: Logger
+  { trayHost :: Host
   , trayClient :: Client
   , trayOrientation :: Gtk.Orientation
+  , trayImageSize :: TrayImageSize
   }
-
-buildHostForHandlers :: Client
-                     -> Logger
-                     -> String
-                     -> [(UpdateType -> ItemInfo -> IO ())]
-                     -> IO ()
-buildHostForHandlers client logger unique updateHandlers =
-  void $ join $ build defaultParams
-       { dbusClient = Just client
-       , hostLogger = logger
-       , uniqueIdentifier = unique
-       , handleUpdate = \t i -> mapM_ (\h -> h t i) updateHandlers
-       }
 
 buildTrayWithHost :: Gtk.Orientation -> IO Gtk.Widget
 buildTrayWithHost orientation = do
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
-  (tray, updateHandler) <- buildTray
-                           TrayParams
-                           { trayLogger = defaultTrayLogger
-                           , trayClient = client
-                           , trayOrientation = orientation
-                           }
-  _ <- join $ build defaultParams
-       { uniqueIdentifier = printf "-%s" $ show pid
-       , handleUpdate = updateHandler
-       , dbusClient = Just client
-       }
+  host <-
+    build defaultParams
+            { uniqueIdentifier = printf "-%s" $ show pid
+            , dbusClient = Just client
+            }
+  tray <-
+    buildTray
+      TrayParams
+      { trayHost = host
+      , trayClient = client
+      , trayOrientation = orientation
+      , trayImageSize = Expand
+      }
   Gtk.toWidget tray
 
-buildTray :: TrayParams -> IO (Gtk.Box, UpdateType -> ItemInfo -> IO ())
-buildTray TrayParams { trayLogger = logger
+buildTray :: TrayParams -> IO Gtk.Box
+buildTray TrayParams { trayHost = Host
+                       { itemInfoMap = getInfoMap
+                       , addUpdateHandler = addHandler
+                       , removeUpdateHandler = removeHandler
+                       }
                      , trayClient = client
                      , trayOrientation = orientation
+                     , trayImageSize = imageSize
                      } = do
-  logL logger INFO "Building tray"
+  trayLogger INFO "Building tray"
 
   trayBox <- Gtk.boxNew orientation 0
-  widgetMap <- MV.newMVar Map.empty
+  contextMap <- MV.newMVar Map.empty
 
-  let getContext name = Map.lookup name <$> MV.readMVar widgetMap
+  let getContext name = Map.lookup name <$> MV.readMVar contextMap
+
+      getSize rectangle =
+        case orientation of
+          Gtk.OrientationHorizontal ->
+            Gdk.getRectangleHeight rectangle
+          Gtk.OrientationVertical ->
+            Gdk.getRectangleWidth rectangle
+
+      getInfo def name = fromMaybe def . Map.lookup name <$> getInfoMap
 
       updateIconFromInfo info@ItemInfo { itemServiceName = name } =
         getContext name >>= updateIcon
         where updateIcon Nothing = updateHandler ItemAdded info
-              updateIcon (Just ItemContext { contextImage = image } ) =
-                getPixBufFromInfo info >>=
+              updateIcon (Just ItemContext { contextImage = image } ) = do
+                size <- case imageSize of
+                          TrayImageSize size -> return size
+                          Expand -> Gtk.widgetGetAllocation image >>= getSize
+                getScaledPixBufFromInfo size info >>=
                                   let handlePixbuf mpbuf =
                                         if isJust mpbuf
                                         then Gtk.imageSetFromPixbuf image mpbuf
@@ -162,20 +175,33 @@ buildTray TrayParams { trayLogger = logger
               logText = printf "Adding widget for %s - %s."
                         serviceNameStr servicePathStr
 
-          logL logger INFO logText
+          trayLogger INFO logText
 
-          pixBuf <- getPixBufFromInfo info
-          image <- Gtk.imageNewFromPixbuf pixBuf
           button <- Gtk.eventBoxNew
+
+          image <-
+            case imageSize of
+              Expand -> do
+                image <- Gtk.imageNew
+                let setPixbuf rectangle =
+                      do
+                        size <- getSize rectangle
+                        pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
+                        Gtk.imageSetFromPixbuf image pixBuf
+                Gtk.onWidgetSizeAllocate image setPixbuf
+                return image
+              TrayImageSize size -> do
+                pixBuf <- getScaledPixBufFromInfo size info
+                image <- Gtk.imageNewFromPixbuf pixBuf
+                return image
+
+          Gtk.containerAdd button image
+
           maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
                        T.pack <$> serviceMenuPathStr
 
-          Gtk.containerAdd button image
-          Gtk.widgetShowAll button
-          Gtk.boxPackStart trayBox button True True 0
-
           let context =
-                ItemContext { contextInfo = info
+                ItemContext { contextName = serviceName
                             , contextMenu = maybeMenu
                             , contextImage = image
                             , contextButton = button
@@ -189,16 +215,19 @@ buildTray TrayParams { trayLogger = logger
 
           Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
 
-          MV.modifyMVar_ widgetMap $ return . Map.insert serviceName context
+          MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
+
+          Gtk.widgetShowAll button
+          Gtk.boxPackStart trayBox button True True 0
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget
         where removeWidget Nothing =
-                logL logger INFO "Attempt to remove widget with unrecognized service name."
+                trayLogger INFO "Attempt to remove widget with unrecognized service name."
               removeWidget (Just ItemContext { contextButton = widgetToRemove }) =
                 do
                   Gtk.containerRemove trayBox widgetToRemove
-                  MV.modifyMVar_ widgetMap $ return . Map.delete name
+                  MV.modifyMVar_ contextMap $ return . Map.delete name
 
       updateHandler IconUpdated i = updateIconFromInfo i
 
@@ -207,28 +236,43 @@ buildTray TrayParams { trayLogger = logger
       updateHandler _ _ = return ()
 
       logItemInfo info message =
-        logL logger INFO $ printf "%s - %s pixmap count: %s" message
+        trayLogger INFO $ printf "%s - %s pixmap count: %s" message
                (show $ info { iconPixmaps = []})
                (show $ length $ iconPixmaps info)
 
-      getPixBufFromInfo info@ItemInfo { iconName = name
+      getScaledPixBufFromInfo size info = runMaybeT $ do
+        pixBuf <- MaybeT $ getPixBufFromInfo size info
+        MaybeT $ pixbufScaleSimple pixBuf size size InterpTypeBilinear
+
+      getPixBufFromInfo size
+                        info@ItemInfo { iconName = name
                                       , iconThemePath = mpath
                                       , iconPixmaps = pixmaps
                                       } = do
         logItemInfo info "Getting pixbuf"
         themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks mpath
-        -- TODO: Make icon size configurable
-        mpixBuf <- getIconPixbufByName 30 (T.pack name) themeForIcon
-        let getFromPixmaps (w, h, p) =
+        let tooSmall (w, h, _) = w < size || h < size
+            largeEnough = filter (not . tooSmall) pixmaps
+            orderer (w1, h1, _) (w2, h2, _) =
+              case comparing id w1 w2 of
+                EQ -> comparing id h1 h2
+                a -> a
+            selectedPixmap =
+              if null largeEnough
+              then maximumBy orderer pixmaps
+              else minimumBy orderer largeEnough
+            getFromPixmaps (w, h, p) =
               if BS.length p == 0
               then Nothing
               else Just $ getIconPixbufFromByteString w h p
         if null pixmaps
-        then return mpixBuf
-        else sequenceA $ listToMaybe pixmaps >>= getFromPixmaps
+        then getIconPixbufByName size (T.pack name) themeForIcon
+        else sequenceA $ getFromPixmaps selectedPixmap
 
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
              updateHandler updateType info >> return False
 
-  return (trayBox, uiUpdateHandler)
+  handlerId <- addHandler uiUpdateHandler
+  _ <- Gtk.onWidgetDestroy trayBox $ removeHandler handlerId
+  return trayBox
