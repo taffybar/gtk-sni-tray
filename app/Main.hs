@@ -22,41 +22,42 @@ positionP :: Parser StrutPosition
 positionP = fromMaybe TopPos <$> optional
   (   flag' TopPos
   (  long "top"
-  <> help "Position the bar at the top of the screen."
+  <> help "Position the bar at the top of the screen"
   )
   <|> flag' BottomPos
   (  long "bottom"
-  <> help "Position the bar at the bottom of the screen."
+  <> help "Position the bar at the bottom of the screen"
   )
   <|> flag' LeftPos
   (  long "left"
-  <> help "Position the bar on the left side of the screen."
+  <> help "Position the bar on the left side of the screen"
   )
   <|> flag' RightPos
   (  long "right"
-  <> help "Position the bar on the right side of the screen."
+  <> help "Position the bar on the right side of the screen"
   ))
 
 alignmentP :: Parser StrutAlignment
 alignmentP = fromMaybe Center <$> optional
   (   flag' Beginning
   (  long "beginning"
-  <> help "Use beginning alignment."
+  <> help "Use beginning alignment"
   )
   <|> flag' Center
   (  long "center"
-  <> help "Use center alignment."
+  <> help "Use center alignment"
   )
   <|> flag' End
   (  long "end"
-  <> help "Use end alignment."
+  <> help "Use end alignment"
   ))
 
 sizeP :: Parser Int32
 sizeP =
   option auto
   (  long "size"
-  <> help "Set the size of the bar."
+  <> short 's'
+  <> help "Set the size of the bar"
   <> value 30
   <> metavar "SIZE"
   )
@@ -65,7 +66,8 @@ paddingP :: Parser Int32
 paddingP =
   option auto
   (  long "padding"
-  <> help "Set the padding of the bar."
+  <> short 'p'
+  <> help "Set the padding of the bar"
   <> value 0
   <> metavar "PADDING"
   )
@@ -75,7 +77,7 @@ monitorNumberP = many $
   option auto
   (  long "monitor"
   <> short 'm'
-  <> help "Run on the selected monitor."
+  <> help "Run on the selected monitor"
   <> metavar "MONITOR"
   )
 
@@ -84,7 +86,7 @@ logP =
   option auto
   (  long "log-level"
   <> short 'l'
-  <> help "Set the log level."
+  <> help "Set the log level"
   <> metavar "LEVEL"
   <> value WARNING
   )
@@ -94,7 +96,7 @@ colorP =
   strOption
   (  long "color"
   <> short 'c'
-  <> help "Set the background color of the tray."
+  <> help "Set the background color of the tray"
   <> metavar "COLOR"
   <> value "000000"
   )
@@ -103,7 +105,7 @@ expandP :: Parser Bool
 expandP =
   switch
   (  long "expand"
-  <> help "Whether to let icons expand into the space allocated to the tray."
+  <> help "Whether to let icons expand into the space allocated to the tray"
   <> short 'e'
   )
 
@@ -125,6 +127,7 @@ buildWindows :: StrutPosition
              -> Bool
              -> IO ()
 buildWindows pos align size padding monitors priority colorString expand = do
+  Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
   client <- connectSession
@@ -182,6 +185,7 @@ buildWindows pos align size padding monitors priority colorString expand = do
   if null monitors
   then buildWithConfig configBase
   else mapM_ runForMonitor monitors
+  Gtk.main
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
@@ -190,8 +194,6 @@ parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
 main :: IO ()
 main = do
   -- TODO: start watcher if it doesn't exist
-  Gtk.init Nothing
   join $ execParser $ info (parser <**> helper)
                (  fullDesc
-               <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray.")
-  Gtk.main
+               <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray")
