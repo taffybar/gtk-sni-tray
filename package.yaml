@@ -47,10 +47,12 @@ executables:
     dependencies:
       - base >= 4.7 && < 5
       - dbus >=1.0.0 && <2.0.0
+      - gi-gdk
       - gi-gtk >= 3.0.21
       - gtk-sni-tray
       - gtk-strut
       - hslogger
       - optparse-applicative
       - status-notifier-item >=0.2.0.0 && <0.3.0.0
+      - text
       - unix

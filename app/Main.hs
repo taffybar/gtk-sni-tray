@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import           Control.Monad
@@ -6,7 +7,9 @@ import           Data.Int
 import           Data.Maybe
 import           Data.Ratio
 import           Data.Semigroup ((<>))
+import qualified Data.Text as T
 import qualified GI.Gtk as Gtk
+import qualified GI.Gdk as Gdk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
 import qualified StatusNotifier.Host.Service as Host
@@ -86,14 +89,33 @@ logP =
   <> value WARNING
   )
 
+colorP :: Parser String
+colorP =
+  strOption
+  (  long "color"
+  <> short 'c'
+  <> help "Set the background color of the tray."
+  <> metavar "COLOR"
+  <> value "000000"
+  )
+
+getColor colorString = do
+  rgba <- Gdk.newZeroRGBA
+  colorParsed <- Gdk.rGBAParse rgba (T.pack colorString)
+  unless colorParsed $ do
+    logM "StatusNotifier.Tray" WARNING "Failed to parse provided color"
+    void $ Gdk.rGBAParse rgba "000000"
+  return rgba
+
 buildWindows :: StrutPosition
              -> StrutAlignment
              -> Int32
              -> Int32
              -> [Int32]
              -> Priority
+             -> String
              -> IO ()
-buildWindows pos align size padding monitors priority = do
+buildWindows pos align size padding monitors priority colorString = do
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
   client <- connectSession
@@ -141,6 +163,8 @@ buildWindows pos align size padding monitors priority = do
                     }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         setupStrutWindow config window
+        (Just <$> getColor colorString) >>=
+             Gtk.widgetOverrideBackgroundColor window [Gtk.StateFlagsNormal]
         Gtk.containerAdd window tray
         Gtk.widgetShowAll window
       runForMonitor monitor =
@@ -151,7 +175,7 @@ buildWindows pos align size padding monitors priority = do
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-         monitorNumberP <*> logP
+         monitorNumberP <*> logP <*> colorP
 
 main :: IO ()
 main = do
