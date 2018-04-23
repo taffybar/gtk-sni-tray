@@ -5,11 +5,9 @@ import           Control.Concurrent.MVar as MV
 import           Control.Monad
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Reader
 import           DBus.Client
 import qualified DBus.Internal.Types as DBusTypes
 import qualified Data.ByteString as BS
-import           Data.ByteString.Unsafe
 import           Data.Coerce
 import           Data.Int
 import           Data.List
@@ -17,28 +15,21 @@ import qualified Data.Map.Strict as Map
 import           Data.Maybe
 import           Data.Ord
 import qualified Data.Text as T
-import           Foreign.Ptr
 import qualified GI.DbusmenuGtk3.Objects.Menu as DM
 import qualified GI.GLib as GLib
 import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
 import           GI.Gdk.Enums
 import           GI.Gdk.Objects.Screen
-import           GI.GdkPixbuf.Callbacks
 import           GI.GdkPixbuf.Enums
 import           GI.GdkPixbuf.Objects.Pixbuf
-import           GI.GdkPixbuf.Structs.Pixdata
 import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
-import qualified GI.Gtk.Objects.Box as Gtk
-import qualified GI.Gtk.Objects.HBox as Gtk
 import           GI.Gtk.Objects.IconTheme
 import           StatusNotifier.Host.Service
 import qualified StatusNotifier.Item.Client as IC
-import           StatusNotifier.Util
 import           System.Directory
 import           System.Log.Logger
-import           System.Posix.Process
 import           Text.Printf
 
 trayLogger = logM "StatusNotifier.Tray"
@@ -175,8 +166,7 @@ buildTray TrayParams { trayHost = Host
                 return image
               TrayImageSize size -> do
                 pixBuf <- getScaledPixBufFromInfo size info
-                image <- Gtk.imageNewFromPixbuf pixBuf
-                return image
+                Gtk.imageNewFromPixbuf pixBuf
 
           Gtk.containerAdd button image
 

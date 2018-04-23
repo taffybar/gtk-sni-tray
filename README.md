@@ -5,7 +5,7 @@ gtk-sni-tray provides a [StatusNotifiedHost](https://www.freedesktop.org/wiki/Sp
 
 taffybar
 ----------
-It is generally recommeneded that you use this widget with [taffybar](https://github.com/travitch/taffybar), which will allow you to combine it with other useful widgets, and will give more flexibility in configuration.
+It is generally recommeneded that you use this widget through [taffybar](https://github.com/travitch/taffybar) with [this module](https://github.com/travitch/taffybar/blob/master/src/System/Taffybar/SNITray.hs), which will allow you to combine it with other useful widgets, and will give more flexibility in configuration.
 
 StatusNotifierWatcher
 --------------------------
@@ -16,4 +16,9 @@ MethodError {methodErrorName = ErrorName "org.freedesktop.DBus.Error.ServiceUnkn
 ```
 
 when you start `gtk-sni-tray-standalone` it is probably because you have not started a StatusNotifierWatcher on your system. You can solve this problem by passing the `--watcher` flag to `gtk-sni-tray-standalone`, but this is not recommeneded, because many SNI processes do not monitor for new watcher processes, and so may not immediately register when this new watcher is started.
+
+Installation
+---------------
+
+Both [`stack`](https://www.haskell.org/cabal/download.html) and [`cabal`](https://www.haskell.org/cabal/download.html) can be used to install gtk-sni-tray.
 
