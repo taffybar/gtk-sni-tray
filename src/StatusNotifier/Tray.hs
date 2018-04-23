@@ -101,6 +101,7 @@ data TrayParams = TrayParams
   , trayClient :: Client
   , trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
+  , trayIconExpand :: Bool
   }
 
 buildTrayWithHost :: Gtk.Orientation -> IO Gtk.Widget
@@ -132,6 +133,7 @@ buildTray TrayParams { trayHost = Host
                      , trayClient = client
                      , trayOrientation = orientation
                      , trayImageSize = imageSize
+                     , trayIconExpand = shouldExpand
                      } = do
   trayLogger INFO "Building tray"
 
@@ -182,7 +184,8 @@ buildTray TrayParams { trayHost = Host
           image <-
             case imageSize of
               Expand -> do
-                image <- Gtk.imageNew
+                traySize <- Gtk.widgetGetAllocation trayBox >>= getSize
+                image <- getScaledPixBufFromInfo traySize info >>= Gtk.imageNewFromPixbuf
                 let setPixbuf rectangle =
                       do
                         size <- getSize rectangle
@@ -218,7 +221,7 @@ buildTray TrayParams { trayHost = Host
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
 
           Gtk.widgetShowAll button
-          Gtk.boxPackStart trayBox button True True 0
+          Gtk.boxPackStart trayBox button shouldExpand True 0
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget

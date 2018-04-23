@@ -99,6 +99,14 @@ colorP =
   <> value "000000"
   )
 
+expandP :: Parser Bool
+expandP =
+  switch
+  (  long "expand"
+  <> help "Whether to let icons expand into the space allocated to the tray."
+  <> short 'e'
+  )
+
 getColor colorString = do
   rgba <- Gdk.newZeroRGBA
   colorParsed <- Gdk.rGBAParse rgba (T.pack colorString)
@@ -114,8 +122,9 @@ buildWindows :: StrutPosition
              -> [Int32]
              -> Priority
              -> String
+             -> Bool
              -> IO ()
-buildWindows pos align size padding monitors priority colorString = do
+buildWindows pos align size padding monitors priority colorString expand = do
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
   client <- connectSession
@@ -160,6 +169,7 @@ buildWindows pos align size padding monitors priority colorString = do
                     , trayOrientation = orientation
                     , trayHost = host
                     , trayImageSize = Expand
+                    , trayIconExpand = expand
                     }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         setupStrutWindow config window
@@ -175,7 +185,7 @@ buildWindows pos align size padding monitors priority colorString = do
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-         monitorNumberP <*> logP <*> colorP
+         monitorNumberP <*> logP <*> colorP <*> expandP
 
 main :: IO ()
 main = do
