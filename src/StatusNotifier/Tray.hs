@@ -104,26 +104,6 @@ data TrayParams = TrayParams
   , trayIconExpand :: Bool
   }
 
-buildTrayWithHost :: Gtk.Orientation -> IO Gtk.Widget
-buildTrayWithHost orientation = do
-  client <- connectSession
-  logger <- getRootLogger
-  pid <- getProcessID
-  host <-
-    build defaultParams
-            { uniqueIdentifier = printf "-%s" $ show pid
-            , dbusClient = Just client
-            }
-  tray <-
-    buildTray
-      TrayParams
-      { trayHost = host
-      , trayClient = client
-      , trayOrientation = orientation
-      , trayImageSize = Expand
-      }
-  Gtk.toWidget tray
-
 buildTray :: TrayParams -> IO Gtk.Box
 buildTray TrayParams { trayHost = Host
                        { itemInfoMap = getInfoMap

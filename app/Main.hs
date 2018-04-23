@@ -109,6 +109,14 @@ expandP =
   <> short 'e'
   )
 
+startWatcherP :: Parser Bool
+startWatcherP =
+  switch
+  (  long "watcher"
+  <> help "Whether to start a Watcher to handle SNI registration"
+  <> short 'w'
+  )
+
 getColor colorString = do
   rgba <- Gdk.newZeroRGBA
   colorParsed <- Gdk.rGBAParse rgba (T.pack colorString)
@@ -125,17 +133,20 @@ buildWindows :: StrutPosition
              -> Priority
              -> String
              -> Bool
+             -> Bool
              -> IO ()
-buildWindows pos align size padding monitors priority colorString expand = do
+buildWindows pos align size padding monitors priority colorString expand startWatcher = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
   client <- connectSession
   logger <- getRootLogger
   pid <- getProcessID
-  host <- Host.build Host.defaultParams
+  -- Okay to use a forced pattern here because we want to die if this fails anyway
+  Just host <- Host.build Host.defaultParams
     { Host.dbusClient = Just client
     , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
+    , Host.startWatcher = startWatcher
     }
   let c1 = defaultStrutConfig
            { strutPosition = pos
@@ -189,7 +200,7 @@ buildWindows pos align size padding monitors priority colorString expand = do
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-         monitorNumberP <*> logP <*> colorP <*> expandP
+         monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP
 
 main :: IO ()
 main = do
