@@ -32,8 +32,10 @@ import           System.Directory
 import           System.Log.Logger
 import           Text.Printf
 
+trayLogger :: Priority -> String -> IO ()
 trayLogger = logM "StatusNotifier.Tray"
 
+themeLoadFlags :: [IconLookupFlags]
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
 
 getThemeWithDefaultFallbacks :: String -> IO IconTheme
@@ -41,7 +43,7 @@ getThemeWithDefaultFallbacks themePath = do
   themeForIcon <- iconThemeNew
   defaultTheme <- iconThemeGetDefault
 
-  runMaybeT $ do
+  _ <- runMaybeT $ do
     screen <- MaybeT screenGetDefault
     lift $ iconThemeSetScreen themeForIcon screen
 
@@ -98,8 +100,8 @@ data TrayParams = TrayParams
 buildTray :: TrayParams -> IO Gtk.Box
 buildTray TrayParams { trayHost = Host
                        { itemInfoMap = getInfoMap
-                       , addUpdateHandler = addHandler
-                       , removeUpdateHandler = removeHandler
+                       , addUpdateHandler = addUHandler
+                       , removeUpdateHandler = removeUHandler
                        }
                      , trayClient = client
                      , trayOrientation = orientation
@@ -117,7 +119,7 @@ buildTray TrayParams { trayHost = Host
         case orientation of
           Gtk.OrientationHorizontal ->
             Gdk.getRectangleHeight rectangle
-          Gtk.OrientationVertical ->
+          _ ->
             Gdk.getRectangleWidth rectangle
 
       getInfo def name = fromMaybe def . Map.lookup name <$> getInfoMap
@@ -162,7 +164,7 @@ buildTray TrayParams { trayHost = Host
                         size <- getSize rectangle
                         pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
                         Gtk.imageSetFromPixbuf image pixBuf
-                Gtk.onWidgetSizeAllocate image setPixbuf
+                _ <- Gtk.onWidgetSizeAllocate image setPixbuf
                 return image
               TrayImageSize size -> do
                 pixBuf <- getScaledPixBufFromInfo size info
@@ -186,7 +188,7 @@ buildTray TrayParams { trayHost = Host
                 maybe activateItem popupItemForMenu maybeMenu >> return False
               activateItem = void $ IC.activate client serviceName servicePath 0 0
 
-          Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
+          _ <- Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
 
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
 
@@ -246,6 +248,6 @@ buildTray TrayParams { trayHost = Host
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
              updateHandler updateType info >> return False
 
-  handlerId <- addHandler uiUpdateHandler
-  _ <- Gtk.onWidgetDestroy trayBox $ removeHandler handlerId
+  handlerId <- addUHandler uiUpdateHandler
+  _ <- Gtk.onWidgetDestroy trayBox $ removeUHandler handlerId
   return trayBox
