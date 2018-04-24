@@ -27,6 +27,7 @@ library:
     - gi-gdkpixbuf >= 2.0.15
     - gi-glib
     - gi-gtk >= 3.0.21
+    - gtk-strut
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
     - hslogger

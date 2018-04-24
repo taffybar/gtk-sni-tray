@@ -26,6 +26,7 @@ import           GI.GdkPixbuf.Objects.Pixbuf
 import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
 import           GI.Gtk.Objects.IconTheme
+import           Graphics.UI.GIGtkStrut
 import           StatusNotifier.Host.Service
 import qualified StatusNotifier.Item.Client as IC
 import           System.Directory
@@ -95,6 +96,7 @@ data TrayParams = TrayParams
   , trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
   , trayIconExpand :: Bool
+  , trayAlignment :: StrutAlignment
   }
 
 buildTray :: TrayParams -> IO Gtk.Box
@@ -107,6 +109,7 @@ buildTray TrayParams { trayHost = Host
                      , trayOrientation = orientation
                      , trayImageSize = imageSize
                      , trayIconExpand = shouldExpand
+                     , trayAlignment = alignment
                      } = do
   trayLogger INFO "Building tray"
 
@@ -193,7 +196,12 @@ buildTray TrayParams { trayHost = Host
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
 
           Gtk.widgetShowAll button
-          Gtk.boxPackStart trayBox button shouldExpand True 0
+          let packFn =
+                case alignment of
+                  End -> Gtk.boxPackEnd
+                  _ -> Gtk.boxPackStart
+
+          packFn trayBox button shouldExpand True 0
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget

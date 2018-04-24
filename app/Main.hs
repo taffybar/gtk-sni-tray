@@ -184,6 +184,7 @@ buildWindows pos align size padding monitors priority colorString expand startWa
                     , trayHost = host
                     , trayImageSize = Expand
                     , trayIconExpand = expand
+                    , trayAlignment = align
                     }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         setupStrutWindow config window
