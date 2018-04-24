@@ -8,8 +8,9 @@ import           Data.Maybe
 import           Data.Ratio
 import           Data.Semigroup ((<>))
 import qualified Data.Text as T
-import qualified GI.Gtk as Gtk
+import           Data.Version (showVersion)
 import qualified GI.Gdk as Gdk
+import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
 import qualified StatusNotifier.Host.Service as Host
@@ -17,6 +18,8 @@ import           StatusNotifier.Tray
 import           System.Log.Logger
 import           System.Posix.Process
 import           Text.Printf
+
+import           Paths_gtk_sni_tray (version)
 
 positionP :: Parser StrutPosition
 positionP = fromMaybe TopPos <$> optional
@@ -212,9 +215,13 @@ parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
          monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*> barLengthP
 
+versionOption :: Parser (a -> a)
+versionOption = infoOption (showVersion version) (long "version" <> help "Show the version number of gtk-sni-tray")
+
 main :: IO ()
-main = do
+main =
   -- TODO: start watcher if it doesn't exist
-  join $ execParser $ info (parser <**> helper)
+  join $ execParser $ info (helper <*> versionOption <*> parser)
                (  fullDesc
-               <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray")
+               <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray"
+               )
