@@ -77,7 +77,7 @@ monitorNumberP = many $
   option auto
   (  long "monitor"
   <> short 'm'
-  <> help "Run on the selected monitor"
+  <> help "Display a tray bar on the given monitor"
   <> metavar "MONITOR"
   )
 
@@ -96,16 +96,16 @@ colorP =
   strOption
   (  long "color"
   <> short 'c'
-  <> help "Set the background color of the tray"
+  <> help "Set the background color of the tray; See https://developer.gnome.org/gdk3/stable/gdk3-RGBA-Colors.html#gdk-rgba-parse for acceptable values"
   <> metavar "COLOR"
-  <> value "000000"
+  <> value "#000000"
   )
 
 expandP :: Parser Bool
 expandP =
   switch
   (  long "expand"
-  <> help "Whether to let icons expand into the space allocated to the tray"
+  <> help "Let icons expand into the space allocated to the tray"
   <> short 'e'
   )
 
@@ -113,8 +113,16 @@ startWatcherP :: Parser Bool
 startWatcherP =
   switch
   (  long "watcher"
-  <> help "Whether to start a Watcher to handle SNI registration"
+  <> help "Start a Watcher to handle SNI registration if one does not exist"
   <> short 'w'
+  )
+
+barLengthP :: Parser Rational
+barLengthP =
+  option auto
+  (  long "length"
+  <> help "Set the proportion of the screen that the tray bar should occupy -- values are parsed as haskell rationals (e.g. 1 % 2)"
+  <> value 1
   )
 
 getColor colorString = do
@@ -122,7 +130,7 @@ getColor colorString = do
   colorParsed <- Gdk.rGBAParse rgba (T.pack colorString)
   unless colorParsed $ do
     logM "StatusNotifier.Tray" WARNING "Failed to parse provided color"
-    void $ Gdk.rGBAParse rgba "000000"
+    void $ Gdk.rGBAParse rgba "#000000"
   return rgba
 
 buildWindows :: StrutPosition
@@ -134,8 +142,9 @@ buildWindows :: StrutPosition
              -> String
              -> Bool
              -> Bool
+             -> Rational
              -> IO ()
-buildWindows pos align size padding monitors priority colorString expand startWatcher = do
+buildWindows pos align size padding monitors priority colorString expand startWatcher length = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -154,7 +163,7 @@ buildWindows pos align size padding monitors priority colorString expand startWa
            , strutXPadding = padding
            , strutYPadding = padding
            }
-      defaultRatio = ScreenRatio (4 % 5)
+      defaultRatio = ScreenRatio length
       configBase = case pos of
              TopPos -> c1
                        { strutHeight = ExactSize size
@@ -201,7 +210,7 @@ buildWindows pos align size padding monitors priority colorString expand startWa
 
 parser :: Parser (IO ())
 parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-         monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP
+         monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*> barLengthP
 
 main :: IO ()
 main = do
