@@ -2,7 +2,7 @@ resolver: lts-11.2
 packages:
 - .
 extra-deps:
-  - status-notified-item-0.2.0.0
+  - status-notifier-item-0.2.0.0
   - gtk-strut-0.1.2.0
   - dbus-1.0.1
   - spool-0.1
