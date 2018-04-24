@@ -2,15 +2,17 @@ resolver: lts-11.2
 packages:
 - .
 extra-deps:
-  - status-notifier-item-0.2.0.0
-  - gtk-strut-0.1.2.0
-  - dbus-1.0.1
-  - spool-0.1
-  - gio-0.13.4.1
-  - gi-dbusmenugtk3-0.4.1
-  - gi-dbusmenu-0.4.1
-  - gi-gdk-3.0.15
-  - gi-gdkpixbuf-2.0.15
-  - gi-gtk-3.0.21
-  - gi-gio-2.0.16
-  - gi-pango-1.0.16
+- dbus-1.0.1
+- gi-dbusmenu-0.4.1
+- gi-dbusmenugtk3-0.4.1
+- gi-gdk-3.0.15
+- gi-gdkpixbuf-2.0.15
+- gi-gio-2.0.16
+- gi-gtk-3.0.21
+- gi-pango-1.0.16
+- gio-0.13.4.1
+- gtk-strut-0.1.2.0
+- haskell-gi-0.21.2
+- haskell-gi-base-0.21.1
+- spool-0.1
+- status-notifier-item-0.2.0.0

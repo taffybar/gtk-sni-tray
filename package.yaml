@@ -21,14 +21,16 @@ library:
     - bytestring
     - containers
     - dbus >=1.0.0 && <2.0.0
+    - directory
     - gi-dbusmenugtk3
     - gi-gdk
     - gi-gdkpixbuf >= 2.0.15
     - gi-glib
     - gi-gtk >= 3.0.21
+    - haskell-gi >= 0.21.2
+    - haskell-gi-base >= 0.21.1
     - hslogger
     - status-notifier-item >=0.2.0.0 && <0.3.0.0
-    - directory
     - text
     - transformers
     - unix
