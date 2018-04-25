@@ -150,7 +150,7 @@ buildTray TrayParams { trayHost = Host
           let serviceNameStr = coerce serviceName
               servicePathStr = coerce servicePath :: String
               serviceMenuPathStr = coerce <$> pathForMenu
-              logText = printf "Adding widget for %s - %s."
+              logText = printf "Adding widget for %s - %s"
                         serviceNameStr servicePathStr
 
           trayLogger INFO logText
@@ -160,13 +160,21 @@ buildTray TrayParams { trayHost = Host
           image <-
             case imageSize of
               Expand -> do
-                traySize <- Gtk.widgetGetAllocation trayBox >>= getSize
-                image <- getScaledPixBufFromInfo traySize info >>= Gtk.imageNewFromPixbuf
+                image <- Gtk.imageNew
                 let setPixbuf rectangle =
                       do
                         size <- getSize rectangle
                         pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
                         Gtk.imageSetFromPixbuf image pixBuf
+                        trayLogger INFO $ printf "Setting size to %s" $ show size
+
+                        allocation <- Gtk.widgetGetAllocation image
+                        actualWidth <- Gdk.getRectangleWidth allocation
+                        actualHeight <- Gdk.getRectangleHeight allocation
+                        when (actualWidth /= size || actualHeight /= size) $ do
+                             Gtk.widgetSetSizeRequest image size size
+                             trayLogger INFO $ printf "Actual width %s" $ show actualWidth
+                             Gtk.containerResizeChildren trayBox
                 _ <- Gtk.onWidgetSizeAllocate image setPixbuf
                 return image
               TrayImageSize size -> do
