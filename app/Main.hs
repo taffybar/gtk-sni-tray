@@ -216,11 +216,14 @@ parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
          monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*> barLengthP
 
 versionOption :: Parser (a -> a)
-versionOption = infoOption (showVersion version) (long "version" <> help "Show the version number of gtk-sni-tray")
+versionOption = infoOption
+                (printf "gtk-sni-tray-standalone %s" $ showVersion version)
+                (  long "version"
+                <> help "Show the version number of gtk-sni-tray"
+                )
 
 main :: IO ()
 main =
-  -- TODO: start watcher if it doesn't exist
   join $ execParser $ info (helper <*> versionOption <*> parser)
                (  fullDesc
                <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray"
