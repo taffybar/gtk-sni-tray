@@ -5,7 +5,7 @@ gtk-sni-tray provides a [StatusNotifierHost](https://www.freedesktop.org/wiki/Sp
 
 taffybar
 ----------
-It is generally recommeneded that you use this widget through [taffybar](https://github.com/travitch/taffybar) with [this module](https://github.com/travitch/taffybar/blob/master/src/System/Taffybar/SNITray.hs), which will allow you to combine it with other useful widgets, and will give more flexibility in configuration.
+It is generally recommeneded that you use this widget through [taffybar](https://github.com/travitch/taffybar) with [this module](https://github.com/travitch/taffybar/blob/master/src/System/Taffybar/Widget/SNITray.hs), which will allow you to combine it with other useful widgets, and will give more flexibility in configuration.
 
 StatusNotifierWatcher
 --------------------------
