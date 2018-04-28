@@ -212,8 +212,10 @@ buildWindows pos align size padding monitors priority colorString expand startWa
   Gtk.main
 
 parser :: Parser (IO ())
-parser = buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-         monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*> barLengthP
+parser =
+  buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
+  monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*>
+  barLengthP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption

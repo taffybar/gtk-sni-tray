@@ -69,7 +69,7 @@ getIconPixbufByName size name themeForIcon = do
     let nameString = T.unpack name
     fileExists <- doesFileExist nameString
     if fileExists
-    then Just <$> pixbufNewFromFile name
+    then Just <$> pixbufNewFromFile nameString
     else return Nothing
 
 getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO Pixbuf
