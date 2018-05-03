@@ -24,7 +24,7 @@ library:
     - directory
     - gi-dbusmenugtk3
     - gi-gdk
-    - gi-gdkpixbuf >= 2.0.15
+    - gi-gdkpixbuf >= 2.0.16
     - gi-glib
     - gi-gtk >= 3.0.21
     - gtk-strut
