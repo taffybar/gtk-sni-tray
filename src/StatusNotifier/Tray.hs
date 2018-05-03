@@ -161,20 +161,39 @@ buildTray TrayParams { trayHost = Host
             case imageSize of
               Expand -> do
                 image <- Gtk.imageNew
+                lastAllocation <- MV.newMVar Nothing
+
                 let setPixbuf rectangle =
                       do
                         size <- getSize rectangle
-                        pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
-                        Gtk.imageSetFromPixbuf image pixBuf
-                        trayLogger INFO $ printf "Setting size to %s" $ show size
 
                         allocation <- Gtk.widgetGetAllocation image
                         actualWidth <- Gdk.getRectangleWidth allocation
                         actualHeight <- Gdk.getRectangleHeight allocation
-                        when (actualWidth /= size || actualHeight /= size) $ do
-                             Gtk.widgetSetSizeRequest image size size
-                             trayLogger INFO $ printf "Actual width %s" $ show actualWidth
-                             Gtk.containerResizeChildren trayBox
+
+                        requestResize <- MV.modifyMVar lastAllocation $ \previous ->
+                          let thisTime = Just (size, actualWidth, actualHeight)
+                          in return (thisTime, thisTime /= previous)
+
+                        trayLogger DEBUG $
+                                   printf "Allocating image size %s, width %s, \
+                                           \ height %s, resize %s"
+                                   (show size)
+                                   (show actualWidth)
+                                   (show actualHeight)
+                                   (show requestResize)
+
+                        if requestResize && actualWidth /= actualHeight
+                        then do
+                          trayLogger DEBUG "Requesting resize"
+                          Gtk.widgetSetSizeRequest image size size
+                          void (Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+                                   Gtk.widgetQueueResize image >> return False)
+                        else do
+                          trayLogger DEBUG "Requesting resize"
+                          pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
+                          Gtk.imageSetFromPixbuf image pixBuf
+
                 _ <- Gtk.onWidgetSizeAllocate image setPixbuf
                 return image
               TrayImageSize size -> do
