@@ -2,6 +2,7 @@
 module StatusNotifier.Tray where
 
 import           Control.Concurrent.MVar as MV
+import           Control.Exception.Enclosed (catchAny)
 import           Control.Monad
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
@@ -30,6 +31,7 @@ import           Graphics.UI.GIGtkStrut
 import           StatusNotifier.Host.Service
 import qualified StatusNotifier.Item.Client as IC
 import           System.Directory
+import           System.FilePath
 import           System.Log.Logger
 import           Text.Printf
 
@@ -54,23 +56,45 @@ getThemeWithDefaultFallbacks themePath = do
 
   return themeForIcon
 
-getIconPixbufByName :: IsIconTheme it =>  Int32 -> T.Text -> it -> IO (Maybe Pixbuf)
-getIconPixbufByName size name themeForIcon = do
-  trayLogger DEBUG "Getting Pixbuf from name"
+getIconPixbufByName :: Int32 -> T.Text -> Maybe String -> IO (Maybe Pixbuf)
+getIconPixbufByName size name themePath = do
+  trayLogger DEBUG $ printf "Getting Pixbuf from name for %s" name
+  themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks themePath
+
   let panelName = T.pack $ printf "%s-panel" name
   hasPanelIcon <- iconThemeHasIcon themeForIcon panelName
   hasIcon <- iconThemeHasIcon themeForIcon name
+
   if hasIcon || hasPanelIcon
+
   then do
     let targetName = if hasPanelIcon then panelName else name
+    trayLogger DEBUG $ printf "Found icon %s in theme" name
     iconThemeLoadIcon themeForIcon targetName size themeLoadFlags
+
   else do
+    trayLogger DEBUG $ printf "Trying to load icon %s as filepath" name
     -- Try to load the icon as a filepath
     let nameString = T.unpack name
     fileExists <- doesFileExist nameString
-    if fileExists
-    then Just <$> pixbufNewFromFile nameString
-    else return Nothing
+    maybeFile <- if fileExists
+    then return $ Just nameString
+    else fmap join $ sequenceA $ getIconPathFromThemePath nameString <$> themePath
+    sequenceA $ pixbufNewFromFile <$> maybeFile
+
+getIconPathFromThemePath :: String -> String -> IO (Maybe String)
+getIconPathFromThemePath name themePath = do
+  trayLogger DEBUG $ printf
+    "Trying to load icon %s as filepath with theme path %s"
+    name themePath
+  pathExists <- doesDirectoryExist themePath
+  if pathExists
+  then do
+    fileNames <- catchAny (getDirectoryContents themePath) (const $ return [])
+    trayLogger DEBUG $ printf
+      "Found files in theme path %s" (show fileNames)
+    return $ (themePath </>) <$> find (isPrefixOf name) fileNames
+  else return Nothing
 
 getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO Pixbuf
 getIconPixbufFromByteString width height byteString = do
@@ -192,6 +216,10 @@ buildTray TrayParams { trayHost = Host
                         else do
                           trayLogger DEBUG "Requesting resize"
                           pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
+                          when (isNothing pixBuf) $
+                               trayLogger WARNING $
+                                          printf "Got null pixbuf for info %s"
+                                          (show info { iconPixmaps = [] })
                           Gtk.imageSetFromPixbuf image pixBuf
 
                 _ <- Gtk.onWidgetSizeAllocate image setPixbuf
@@ -260,7 +288,6 @@ buildTray TrayParams { trayHost = Host
                                       , iconPixmaps = pixmaps
                                       } = do
         logItemInfo info "Getting pixbuf"
-        themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks mpath
         let tooSmall (w, h, _) = w < size || h < size
             largeEnough = filter (not . tooSmall) pixmaps
             orderer (w1, h1, _) (w2, h2, _) =
@@ -276,7 +303,7 @@ buildTray TrayParams { trayHost = Host
               then Nothing
               else Just $ getIconPixbufFromByteString w h p
         if null pixmaps
-        then getIconPixbufByName size (T.pack name) themeForIcon
+        then getIconPixbufByName size (T.pack name) mpath
         else sequenceA $ getFromPixmaps selectedPixmap
 
       uiUpdateHandler updateType info =
