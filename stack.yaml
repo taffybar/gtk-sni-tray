@@ -1,8 +1,9 @@
-resolver: lts-11.6
+resolver: lts-11.7
 packages:
 - .
 extra-deps:
 - dbus-1.0.1
+- dbus-hslogger-0.1.0.1
 - gi-dbusmenu-0.4.1
 - gi-dbusmenugtk3-0.4.1
 - gi-gdk-3.0.15
@@ -15,4 +16,4 @@ extra-deps:
 - haskell-gi-0.21.2
 - haskell-gi-base-0.21.1
 - spool-0.1
-- status-notifier-item-0.2.0.0
+- status-notifier-item-0.2.2.0

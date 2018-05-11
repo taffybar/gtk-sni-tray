@@ -141,6 +141,7 @@ buildTray TrayParams { trayHost = Host
   contextMap <- MV.newMVar Map.empty
 
   let getContext name = Map.lookup name <$> MV.readMVar contextMap
+      showInfo info = (show info { iconPixmaps = [] })
 
       getSize rectangle =
         case orientation of
@@ -162,7 +163,9 @@ buildTray TrayParams { trayHost = Host
                                   let handlePixbuf mpbuf =
                                         if isJust mpbuf
                                         then Gtk.imageSetFromPixbuf image mpbuf
-                                        else updateHandler ItemRemoved info
+                                        else trayLogger WARNING $
+                                             printf "Failed to get pixbuf for %s" $
+                                             showInfo info
                                   in handlePixbuf
 
       updateHandler ItemAdded
@@ -218,8 +221,8 @@ buildTray TrayParams { trayHost = Host
                           pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
                           when (isNothing pixBuf) $
                                trayLogger WARNING $
-                                          printf "Got null pixbuf for info %s"
-                                          (show info { iconPixmaps = [] })
+                                          printf "Got null pixbuf for info %s" $
+                                          showInfo info
                           Gtk.imageSetFromPixbuf image pixBuf
 
                 _ <- Gtk.onWidgetSizeAllocate image setPixbuf

@@ -33,7 +33,7 @@ library:
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
     - hslogger
-    - status-notifier-item >=0.2.0.0 && <0.3.0.0
+    - status-notifier-item >= 0.2.2.0 && < 0.3.0.0
     - text
     - transformers
     - unix
@@ -52,12 +52,13 @@ executables:
     dependencies:
       - base >= 4.7 && < 5
       - dbus >=1.0.0 && <2.0.0
+      - dbus-hslogger >= 0.1.0.1 && < 0.2.0.0
       - gi-gdk
       - gi-gtk >= 3.0.21
       - gtk-sni-tray
       - gtk-strut
       - hslogger
       - optparse-applicative
-      - status-notifier-item >=0.2.0.0 && <0.3.0.0
+      - status-notifier-item >= 0.2.0.0 && < 0.3.0.0
       - text
       - unix
