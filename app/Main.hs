@@ -224,7 +224,7 @@ versionOption = infoOption
                 (printf "gtk-sni-tray-standalone %s" $ showVersion version)
                 (  long "version"
                 <> help "Show the version number of gtk-sni-tray"
-                )p
+                )
 
 main :: IO ()
 main =
