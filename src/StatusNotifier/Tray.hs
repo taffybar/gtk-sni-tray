@@ -123,7 +123,7 @@ getIconPathFromThemePath name themePath = do
   pathExists <- doesDirectoryExist themePath
   if pathExists
   then do
-    fileNames <- catchAny (getDirectoryContents themePath) (const $ return [])
+    fileNames <- catchAny (listDirectory themePath) (const $ return [])
     trayLogger DEBUG $ printf
       "Found files in theme path %s" (show fileNames)
     return $ (themePath </>) <$> find (isPrefixOf name) fileNames

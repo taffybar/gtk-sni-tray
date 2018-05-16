@@ -14,6 +14,7 @@ import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
 import qualified StatusNotifier.Host.Service as Host
+import           StatusNotifier.TransparentWindow
 import           StatusNotifier.Tray
 import           System.Log.Logger
 import           System.Posix.Process
@@ -94,14 +95,13 @@ logP =
   <> value WARNING
   )
 
-colorP :: Parser String
-colorP =
+colorP :: Parser (Maybe String)
+colorP = optional $
   strOption
   (  long "color"
   <> short 'c'
   <> help "Set the background color of the tray; See https://developer.gnome.org/gdk3/stable/gdk3-RGBA-Colors.html#gdk-rgba-parse for acceptable values"
   <> metavar "COLOR"
-  <> value "#000000"
   )
 
 expandP :: Parser Bool
@@ -142,12 +142,13 @@ buildWindows :: StrutPosition
              -> Int32
              -> [Int32]
              -> Priority
-             -> String
+             -> Maybe String
              -> Bool
              -> Bool
              -> Rational
              -> IO ()
-buildWindows pos align size padding monitors priority colorString expand startWatcher length = do
+buildWindows pos align size padding monitors priority maybeColorString expand
+             startWatcher length = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -155,60 +156,61 @@ buildWindows pos align size padding monitors priority colorString expand startWa
   logger <- getRootLogger
   pid <- getProcessID
   -- Okay to use a forced pattern here because we want to die if this fails anyway
-  Just host <- Host.build Host.defaultParams
-    { Host.dbusClient = Just client
-    , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
-    , Host.startWatcher = startWatcher
-    }
-  let c1 = defaultStrutConfig
-           { strutPosition = pos
-           , strutAlignment = align
-           , strutXPadding = padding
-           , strutYPadding = padding
-           }
+  Just host <-
+    Host.build
+      Host.defaultParams
+      { Host.dbusClient = Just client
+      , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
+      , Host.startWatcher = startWatcher
+      }
+  let c1 =
+        defaultStrutConfig
+        { strutPosition = pos
+        , strutAlignment = align
+        , strutXPadding = padding
+        , strutYPadding = padding
+        }
       defaultRatio = ScreenRatio length
-      configBase = case pos of
-             TopPos -> c1
-                       { strutHeight = ExactSize size
-                       , strutWidth = defaultRatio
-                       }
-             BottomPos -> c1
-                          { strutHeight = ExactSize size
-                          , strutWidth = defaultRatio
-                          }
-             RightPos -> c1
-                         { strutHeight = defaultRatio
-                         , strutWidth = ExactSize size
-                         }
-             LeftPos -> c1
-                        { strutHeight = defaultRatio
-                        , strutWidth = ExactSize size
-                        }
+      configBase =
+        case pos of
+          TopPos -> c1 {strutHeight = ExactSize size, strutWidth = defaultRatio}
+          BottomPos ->
+            c1 {strutHeight = ExactSize size, strutWidth = defaultRatio}
+          RightPos ->
+            c1 {strutHeight = defaultRatio, strutWidth = ExactSize size}
+          LeftPos ->
+            c1 {strutHeight = defaultRatio, strutWidth = ExactSize size}
       buildWithConfig config = do
         let orientation =
               case strutPosition config of
                 TopPos -> Gtk.OrientationHorizontal
                 BottomPos -> Gtk.OrientationHorizontal
                 _ -> Gtk.OrientationVertical
-        tray <- buildTray TrayParams
-                    { trayClient = client
-                    , trayOrientation = orientation
-                    , trayHost = host
-                    , trayImageSize = Expand
-                    , trayIconExpand = expand
-                    , trayAlignment = align
-                    }
+        tray <-
+          buildTray
+            TrayParams
+            { trayClient = client
+            , trayOrientation = orientation
+            , trayHost = host
+            , trayImageSize = Expand
+            , trayIconExpand = expand
+            , trayAlignment = align
+            }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         setupStrutWindow config window
-        (Just <$> getColor colorString) >>=
-             Gtk.widgetOverrideBackgroundColor window [Gtk.StateFlagsNormal]
+        maybe
+          (makeWindowTransparent window)
+          (getColor >=>
+           Gtk.widgetOverrideBackgroundColor window [Gtk.StateFlagsNormal] .
+           Just)
+          maybeColorString
         Gtk.containerAdd window tray
         Gtk.widgetShowAll window
       runForMonitor monitor =
-        buildWithConfig configBase { strutMonitor = Just monitor }
+        buildWithConfig configBase {strutMonitor = Just monitor}
   if null monitors
-  then buildWithConfig configBase
-  else mapM_ runForMonitor monitors
+    then buildWithConfig configBase
+    else mapM_ runForMonitor monitors
   Gtk.main
 
 parser :: Parser (IO ())
@@ -222,11 +224,11 @@ versionOption = infoOption
                 (printf "gtk-sni-tray-standalone %s" $ showVersion version)
                 (  long "version"
                 <> help "Show the version number of gtk-sni-tray"
-                )
+                )p
 
 main :: IO ()
 main =
   join $ execParser $ info (helper <*> versionOption <*> parser)
-               (  fullDesc
-               <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray"
-               )
+         (  fullDesc
+         <> progDesc "Run a standalone StatusNotifierItem/AppIndicator tray"
+         )

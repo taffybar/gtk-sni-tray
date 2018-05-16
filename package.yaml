@@ -19,11 +19,13 @@ library:
   dependencies:
     - base >= 4.7 && < 5
     - bytestring
+    - cairo
     - containers
     - dbus >=1.0.0 && <2.0.0
     - directory
     - enclosed-exceptions >= 1.0.0.1
     - filepath
+    - gi-cairo
     - gi-dbusmenugtk3
     - gi-gdk
     - gi-gdkpixbuf >= 2.0.16
@@ -36,6 +38,7 @@ library:
     - status-notifier-item >= 0.2.2.0 && < 0.3.0.0
     - text
     - transformers
+    - transformers-base >= 0.4
     - unix
   source-dirs: src
   pkg-config-dependencies:
