@@ -38,6 +38,39 @@ import           Text.Printf
 trayLogger :: Priority -> String -> IO ()
 trayLogger = logM "StatusNotifier.Tray"
 
+getScaledWidthHeight :: Bool -> Int32 -> Int32 -> Int32 -> (Int32, Int32)
+getScaledWidthHeight shouldTargetWidth targetSize width height =
+  let getRatio :: Int32 -> Rational
+      getRatio toScale =
+        fromIntegral targetSize / fromIntegral toScale
+      getOther :: Int32 -> Int32 -> Int32
+      getOther toScale other = floor $ getRatio toScale * fromIntegral other
+  in
+    if shouldTargetWidth
+    then (targetSize, getOther width height)
+    else (getOther height width, targetSize)
+
+scalePixbufToSize :: Int32 -> Gtk.Orientation -> Pixbuf -> IO Pixbuf
+scalePixbufToSize size orientation pixbuf = do
+  width <- pixbufGetWidth pixbuf
+  height <- pixbufGetHeight pixbuf
+  let warnAndReturnOrig =
+        trayLogger WARNING "Unable to scale pixbuf" >> return pixbuf
+      targetWidth = case orientation of
+                      Gtk.OrientationHorizontal -> False
+                      _ -> True
+      (scaledWidth, scaledHeight) = getScaledWidthHeight targetWidth size width height
+  trayLogger DEBUG $
+             printf
+             "Scaling pb to %s, actualW: %s, actualH: %s, scaledW: %s, scaledH: %s"
+             (show size) (show width) (show height)
+             (show scaledWidth) (show scaledHeight)
+
+  trayLogger DEBUG $ printf "targetW: %s, targetH: %s"
+               (show scaledWidth) (show scaledHeight)
+  maybe warnAndReturnOrig return =<<
+    pixbufScaleSimple pixbuf scaledWidth scaledHeight InterpTypeBilinear
+
 themeLoadFlags :: [IconLookupFlags]
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
 
@@ -141,7 +174,7 @@ buildTray TrayParams { trayHost = Host
   contextMap <- MV.newMVar Map.empty
 
   let getContext name = Map.lookup name <$> MV.readMVar contextMap
-      showInfo info = (show info { iconPixmaps = [] })
+      showInfo info = show info { iconPixmaps = [] }
 
       getSize rectangle =
         case orientation of
@@ -190,11 +223,10 @@ buildTray TrayParams { trayHost = Host
                 image <- Gtk.imageNew
                 lastAllocation <- MV.newMVar Nothing
 
-                let setPixbuf rectangle =
+                let setPixbuf allocation =
                       do
-                        size <- getSize rectangle
+                        size <- getSize allocation
 
-                        allocation <- Gtk.widgetGetAllocation image
                         actualWidth <- Gdk.getRectangleWidth allocation
                         actualHeight <- Gdk.getRectangleHeight allocation
 
@@ -210,13 +242,7 @@ buildTray TrayParams { trayHost = Host
                                    (show actualHeight)
                                    (show requestResize)
 
-                        if requestResize && actualWidth /= actualHeight
-                        then do
-                          trayLogger DEBUG "Requesting resize"
-                          Gtk.widgetSetSizeRequest image size size
-                          void (Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-                                   Gtk.widgetQueueResize image >> return False)
-                        else do
+                        when requestResize $ do
                           trayLogger DEBUG "Requesting resize"
                           pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
                           when (isNothing pixBuf) $
@@ -224,6 +250,14 @@ buildTray TrayParams { trayHost = Host
                                           printf "Got null pixbuf for info %s" $
                                           showInfo info
                           Gtk.imageSetFromPixbuf image pixBuf
+                          void $ traverse
+                                 (\pb -> do
+                                    width <- pixbufGetWidth pb
+                                    height <- pixbufGetHeight pb
+                                    Gtk.widgetSetSizeRequest image width height)
+                                 pixBuf
+                          void (Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+                                   Gtk.widgetQueueResize image >> return False)
 
                 _ <- Gtk.onWidgetSizeAllocate image setPixbuf
                 return image
@@ -281,9 +315,9 @@ buildTray TrayParams { trayHost = Host
                (show $ info { iconPixmaps = []})
                (show $ length $ iconPixmaps info)
 
-      getScaledPixBufFromInfo size info = runMaybeT $ do
-        pixBuf <- MaybeT $ getPixBufFromInfo size info
-        MaybeT $ pixbufScaleSimple pixBuf size size InterpTypeBilinear
+      getScaledPixBufFromInfo size info =
+        getPixBufFromInfo size info >>=
+        traverse (scalePixbufToSize size orientation)
 
       getPixBufFromInfo size
                         info@ItemInfo { iconName = name
