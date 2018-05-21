@@ -31,7 +31,7 @@ library:
     - gi-gdkpixbuf >= 2.0.16
     - gi-glib
     - gi-gtk >= 3.0.21
-    - gtk-strut
+    - gtk-strut >= 0.1.2.1
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
     - hslogger
