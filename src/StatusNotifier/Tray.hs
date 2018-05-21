@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLabels #-}
 module StatusNotifier.Tray where
 
@@ -37,6 +38,12 @@ import           Text.Printf
 
 trayLogger :: Priority -> String -> IO ()
 trayLogger = logM "StatusNotifier.Tray"
+
+logItemInfo :: ItemInfo -> String -> IO ()
+logItemInfo info message =
+  trayLogger INFO $ printf "%s - %s pixmap count: %s" message
+         (show $ info { iconPixmaps = []})
+         (show $ length $ iconPixmaps info)
 
 getScaledWidthHeight :: Bool -> Int32 -> Int32 -> Int32 -> (Int32, Int32)
 getScaledWidthHeight shouldTargetWidth targetSize width height =
@@ -265,6 +272,9 @@ buildTray TrayParams { trayHost = Host
                 pixBuf <- getScaledPixBufFromInfo size info
                 Gtk.imageNewFromPixbuf pixBuf
 
+          Gtk.widgetGetStyleContext image >>=
+             flip Gtk.styleContextAddClass "tray-icon-image"
+
           Gtk.containerAdd button image
 
           maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
@@ -309,11 +319,6 @@ buildTray TrayParams { trayHost = Host
       updateHandler IconNameUpdated i = updateIconFromInfo i
 
       updateHandler _ _ = return ()
-
-      logItemInfo info message =
-        trayLogger INFO $ printf "%s - %s pixmap count: %s" message
-               (show $ info { iconPixmaps = []})
-               (show $ length $ iconPixmaps info)
 
       getScaledPixBufFromInfo size info =
         getPixBufFromInfo size info >>=
