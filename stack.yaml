@@ -5,7 +5,7 @@ packages:
 #   extra-dep: true
 - location:
     git: git@github.com:IvanMalison/status-notifier-item.git
-    commit: e09ce116b36eebd97bc98fe1622795642943db0a
+    commit: e0d1d7867e8fe593745659e3604ecdf191a2ab3f
   extra-dep: true
 extra-deps:
 - dbus-1.0.1
