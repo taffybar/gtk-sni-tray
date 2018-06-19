@@ -1,6 +1,12 @@
 resolver: lts-11.7
 packages:
 - .
+# - location: ../status-notifier-item
+#   extra-dep: true
+- location:
+    git: git@github.com:IvanMalison/status-notifier-item.git
+    commit: e09ce116b36eebd97bc98fe1622795642943db0a
+  extra-dep: true
 extra-deps:
 - dbus-1.0.1
 - dbus-hslogger-0.1.0.1
@@ -17,7 +23,6 @@ extra-deps:
 - haskell-gi-0.21.2
 - haskell-gi-base-0.21.1
 - spool-0.1
-- status-notifier-item-0.2.2.0
 nix:
   packages:
     - gcc
