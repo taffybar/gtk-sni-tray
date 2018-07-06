@@ -326,22 +326,51 @@ buildTray TrayParams { trayHost = Host
                   MV.modifyMVar_ contextMap $ return . Map.delete name
 
       updateHandler IconUpdated i = updateIconFromInfo i
+      updateHandler OverlayIconUpdated i = updateIconFromInfo i
 
       updateHandler ToolTipUpdated info@ItemInfo { itemServiceName = name } =
         void $ getContext name >>= traverse (flip setTooltipText info . contextButton)
 
       updateHandler _ _ = return ()
 
+      maybeAddOverlayToPixbuf size info pixbuf = do
+        runMaybeT $ do
+          let overlayHeight = (size `div` 2)
+          overlayPixbuf <- MaybeT $ getOverlayPixBufFromInfo overlayHeight info >>=
+                           traverse (scalePixbufToSize overlayHeight Gtk.OrientationHorizontal)
+          lift $ do
+            trayLogger WARNING "Has overlay pixbuf"
+            actualOHeight <- getPixbufHeight overlayPixbuf
+            actualOWidth <- getPixbufWidth overlayPixbuf
+            mainHeight <- getPixbufHeight pixbuf
+            mainWidth <- getPixbufWidth pixbuf
+            pixbufComposite overlayPixbuf pixbuf
+              0 0                           -- Top left corner
+              actualOWidth actualOHeight    -- Overlay size
+              0 0                           -- Offset
+              1.0 1.0                       -- Scale
+              InterpTypeBilinear            -- InterpType
+              255                           -- Source image alpha
+        return pixbuf
+
       getScaledPixBufFromInfo size info =
         getPixBufFromInfo size info >>=
-        traverse (scalePixbufToSize size orientation)
+        traverse (scalePixbufToSize size orientation >=>
+                  maybeAddOverlayToPixbuf size info)
 
       getPixBufFromInfo size
                         info@ItemInfo { iconName = name
                                       , iconThemePath = mpath
                                       , iconPixmaps = pixmaps
-                                      } = do
-        logItemInfo info "Getting pixbuf"
+                                      } = getPixBufFrom size name mpath pixmaps
+
+      getOverlayPixBufFromInfo size
+                               info@ItemInfo { overlayIconName = name
+                                             , iconThemePath = mpath
+                                             , overlayIconPixmaps = pixmaps
+                                             } = getPixBufFrom size (fromMaybe "" name) mpath pixmaps
+
+      getPixBufFrom size name mpath pixmaps = do
         let tooSmall (w, h, _) = w < size || h < size
             largeEnough = filter (not . tooSmall) pixmaps
             orderer (w1, h1, _) (w2, h2, _) =
