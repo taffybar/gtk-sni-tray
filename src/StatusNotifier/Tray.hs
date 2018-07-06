@@ -316,7 +316,6 @@ buildTray TrayParams { trayHost = Host
 
       updateHandler IconUpdated i = updateIconFromInfo i
 
-      updateHandler IconNameUpdated i = updateIconFromInfo i
 
       updateHandler _ _ = return ()
 

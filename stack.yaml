@@ -17,4 +17,4 @@ extra-deps:
 - haskell-gi-0.21.2
 - haskell-gi-base-0.21.1
 - spool-0.1
-- status-notifier-item-0.2.2.1
+- status-notifier-item-0.3.0.0
