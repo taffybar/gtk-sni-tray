@@ -208,6 +208,16 @@ buildTray TrayParams { trayHost = Host
                                              showInfo info
                                   in handlePixbuf
 
+      getTooltipText ItemInfo { itemToolTip = Just (_, _, titleText, fullText )}
+        | titleText == fullText = fullText
+        | titleText == "" = fullText
+        | fullText == "" = titleText
+        | otherwise = printf "%s: %s" titleText fullText
+      getTooltipText _ = ""
+
+      setTooltipText widget info =
+        Gtk.widgetSetTooltipText widget $ Just $ T.pack $ getTooltipText info
+
       updateHandler ItemAdded
                     info@ItemInfo { menuPath = pathForMenu
                                   , itemServiceName = serviceName
@@ -276,6 +286,7 @@ buildTray TrayParams { trayHost = Host
              flip Gtk.styleContextAddClass "tray-icon-image"
 
           Gtk.containerAdd button image
+          setTooltipText button info
 
           maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
                        T.pack <$> serviceMenuPathStr
@@ -316,6 +327,8 @@ buildTray TrayParams { trayHost = Host
 
       updateHandler IconUpdated i = updateIconFromInfo i
 
+      updateHandler ToolTipUpdated info@ItemInfo { itemServiceName = name } =
+        void $ getContext name >>= traverse (flip setTooltipText info . contextButton)
 
       updateHandler _ _ = return ()
 
