@@ -18,3 +18,19 @@ extra-deps:
 - haskell-gi-base-0.21.1
 - spool-0.1
 - status-notifier-item-0.3.0.0
+nix:
+  packages:
+    - gcc
+    - gobjectIntrospection
+    - gtk3
+    - libdbusmenu-glib
+    - libdbusmenu-gtk3
+    - libxml2
+    - pkgconfig
+    - x11
+    - xorg.libX11
+    - xorg.libXext
+    - xorg.libXinerama
+    - xorg.libXrandr
+    - xorg.libXrender
+    - zlib

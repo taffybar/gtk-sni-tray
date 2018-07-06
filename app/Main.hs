@@ -116,8 +116,8 @@ startWatcherP :: Parser Bool
 startWatcherP =
   switch
   (  long "watcher"
-  <> help "Start a Watcher to handle SNI registration if one does not exist"
   <> short 'w'
+  <> help "Start a Watcher to handle SNI registration if one does not exist"
   )
 
 barLengthP :: Parser Rational
@@ -126,6 +126,15 @@ barLengthP =
   (  long "length"
   <> help "Set the proportion of the screen that the tray bar should occupy -- values are parsed as haskell rationals (e.g. 1 % 2)"
   <> value 1
+  )
+
+overlayScaleP :: Parser Rational
+overlayScaleP =
+  option auto
+  (  long "overlay-scale"
+  <> short 'o'
+  <> help "The proportion of the tray icon's size that should be set for overlay icons."
+  <> value (5 % 7)
   )
 
 getColor colorString = do
@@ -146,9 +155,10 @@ buildWindows :: StrutPosition
              -> Bool
              -> Bool
              -> Rational
+             -> Rational
              -> IO ()
 buildWindows pos align size padding monitors priority maybeColorString expand
-             startWatcher length = do
+             startWatcher length overlayScale = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -195,6 +205,7 @@ buildWindows pos align size padding monitors priority maybeColorString expand
             , trayImageSize = Expand
             , trayIconExpand = expand
             , trayAlignment = align
+            , trayOverlayScale = overlayScale
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         setupStrutWindow config window
@@ -217,7 +228,7 @@ parser :: Parser (IO ())
 parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
   monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*>
-  barLengthP
+  barLengthP <*> overlayScaleP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption

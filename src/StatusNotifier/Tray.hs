@@ -161,6 +161,7 @@ data TrayParams = TrayParams
   , trayImageSize :: TrayImageSize
   , trayIconExpand :: Bool
   , trayAlignment :: StrutAlignment
+  , trayOverlayScale :: Rational
   }
 
 buildTray :: TrayParams -> IO Gtk.Box
@@ -174,6 +175,7 @@ buildTray TrayParams { trayHost = Host
                      , trayImageSize = imageSize
                      , trayIconExpand = shouldExpand
                      , trayAlignment = alignment
+                     , trayOverlayScale = overlayScale
                      } = do
   trayLogger INFO "Building tray"
 
@@ -335,11 +337,10 @@ buildTray TrayParams { trayHost = Host
 
       maybeAddOverlayToPixbuf size info pixbuf = do
         runMaybeT $ do
-          let overlayHeight = (size `div` 2)
+          let overlayHeight = floor (fromIntegral size * overlayScale)
           overlayPixbuf <- MaybeT $ getOverlayPixBufFromInfo overlayHeight info >>=
                            traverse (scalePixbufToSize overlayHeight Gtk.OrientationHorizontal)
           lift $ do
-            trayLogger WARNING "Has overlay pixbuf"
             actualOHeight <- getPixbufHeight overlayPixbuf
             actualOWidth <- getPixbufWidth overlayPixbuf
             mainHeight <- getPixbufHeight pixbuf
