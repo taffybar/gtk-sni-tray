@@ -123,7 +123,7 @@ getIconPixbufByName size name themePath = do
     sequenceA $ pixbufNewFromFile <$> maybeFile
 
 getIconPathFromThemePath :: String -> String -> IO (Maybe String)
-getIconPathFromThemePath name themePath = do
+getIconPathFromThemePath name themePath = if name == "" then return Nothing else do
   trayLogger DEBUG $ printf
     "Trying to load icon %s as filepath with theme path %s"
     name themePath
