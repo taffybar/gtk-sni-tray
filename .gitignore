@@ -1,3 +1,4 @@
 .stack-work/
 gtk-sni-tray.cabal
 *~
+dist*

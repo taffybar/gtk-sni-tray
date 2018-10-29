@@ -1,6 +1,4 @@
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, GADTs, OverloadedLabels, UnicodeSyntax #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : StatusNotifier.TransparentWindow
@@ -19,23 +17,14 @@ module StatusNotifier.TransparentWindow where
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.GI.Base
-import           Foreign.Ptr (castPtr)
+import           Foreign.Ptr                ( castPtr )
 import qualified GI.Cairo
-import qualified GI.Gdk as Gdk
-import qualified GI.Gtk as Gtk
-import           Graphics.Rendering.Cairo
-import           Graphics.Rendering.Cairo.Internal (Render(runRender))
-import           Graphics.Rendering.Cairo.Types (Cairo(Cairo))
+import           GI.Cairo.Render
+import           GI.Cairo.Render.Connector
+import qualified GI.Gdk                     as Gdk
+import qualified GI.Gtk                     as Gtk
 
--- | This function bridges gi-cairo with the hand-written cairo package. It
--- takes a `GI.Cairo.Context` (as it appears in gi-cairo), and a `Render` action
--- (as in the cairo lib), and renders the `Render` action into the given
--- context.
-renderWithContext :: GI.Cairo.Context -> Render () -> IO ()
-renderWithContext ct r =
-  withManagedPtr ct $ \p -> runReaderT (runRender r) (Cairo (castPtr p))
-
-makeWindowTransparent :: MonadIO m => Gtk.Window -> m ()
+makeWindowTransparent ∷ MonadIO m ⇒ Gtk.Window → m ()
 makeWindowTransparent window = do
   screen <- Gtk.widgetGetScreen window
   visual <- Gdk.screenGetRgbaVisual screen
@@ -44,7 +33,7 @@ makeWindowTransparent window = do
   _ <- Gtk.onWidgetDraw window transparentDraw
   return ()
 
-transparentDraw :: Gtk.WidgetDrawCallback
+transparentDraw ∷ Gtk.WidgetDrawCallback
 transparentDraw context = do
   rGBA <- Gdk.newZeroRGBA
   Gdk.setRGBAAlpha rGBA 0.0
@@ -52,7 +41,7 @@ transparentDraw context = do
   Gdk.setRGBARed rGBA 1.0
   Gdk.setRGBAGreen rGBA 1.0
   Gdk.cairoSetSourceRgba context rGBA
-  renderWithContext context $ do
+  flip renderWithContext context $ do
     setOperator OperatorSource
     paint
     setOperator OperatorOver
