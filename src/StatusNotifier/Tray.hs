@@ -99,7 +99,9 @@ getThemeWithDefaultFallbacks themePath = do
 getIconPixbufByName :: Int32 -> T.Text -> Maybe String -> IO (Maybe Pixbuf)
 getIconPixbufByName size name themePath = do
   trayLogger DEBUG $ printf "Getting Pixbuf from name for %s" name
-  themeForIcon <- maybe iconThemeGetDefault getThemeWithDefaultFallbacks themePath
+  let nonEmptyThemePath = themePath >>= (\x -> if x == "" then Nothing else Just x)
+  themeForIcon <-
+    maybe iconThemeGetDefault getThemeWithDefaultFallbacks nonEmptyThemePath
 
   let panelName = T.pack $ printf "%s-panel" name
   hasPanelIcon <- iconThemeHasIcon themeForIcon panelName
@@ -338,8 +340,9 @@ buildTray TrayParams { trayHost = Host
       maybeAddOverlayToPixbuf size info pixbuf = do
         runMaybeT $ do
           let overlayHeight = floor (fromIntegral size * overlayScale)
-          overlayPixbuf <- MaybeT $ getOverlayPixBufFromInfo overlayHeight info >>=
-                           traverse (scalePixbufToSize overlayHeight Gtk.OrientationHorizontal)
+          overlayPixbuf <-
+            MaybeT $ getOverlayPixBufFromInfo overlayHeight info >>=
+            traverse (scalePixbufToSize overlayHeight Gtk.OrientationHorizontal)
           lift $ do
             actualOHeight <- getPixbufHeight overlayPixbuf
             actualOWidth <- getPixbufWidth overlayPixbuf

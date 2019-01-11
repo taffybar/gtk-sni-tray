@@ -20,20 +20,11 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.GI.Base
 import           Foreign.Ptr (castPtr)
-import qualified GI.Cairo
+import           GI.Cairo hiding (OperatorOver, OperatorSource)
+import           GI.Cairo.Render
+import           GI.Cairo.Render.Connector
 import qualified GI.Gdk as Gdk
 import qualified GI.Gtk as Gtk
-import           Graphics.Rendering.Cairo
-import           Graphics.Rendering.Cairo.Internal (Render(runRender))
-import           Graphics.Rendering.Cairo.Types (Cairo(Cairo))
-
--- | This function bridges gi-cairo with the hand-written cairo package. It
--- takes a `GI.Cairo.Context` (as it appears in gi-cairo), and a `Render` action
--- (as in the cairo lib), and renders the `Render` action into the given
--- context.
-renderWithContext :: GI.Cairo.Context -> Render () -> IO ()
-renderWithContext ct r =
-  withManagedPtr ct $ \p -> runReaderT (runRender r) (Cairo (castPtr p))
 
 makeWindowTransparent :: MonadIO m => Gtk.Window -> m ()
 makeWindowTransparent window = do
@@ -52,7 +43,7 @@ transparentDraw context = do
   Gdk.setRGBARed rGBA 1.0
   Gdk.setRGBAGreen rGBA 1.0
   Gdk.cairoSetSourceRgba context rGBA
-  renderWithContext context $ do
+  flip renderWithContext context $ do
     setOperator OperatorSource
     paint
     setOperator OperatorOver
