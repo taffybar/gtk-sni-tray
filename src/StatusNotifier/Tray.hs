@@ -112,7 +112,8 @@ getIconPixbufByName size name themePath = do
   then do
     let targetName = if hasPanelIcon then panelName else name
     trayLogger DEBUG $ printf "Found icon %s in theme" name
-    iconThemeLoadIcon themeForIcon targetName size themeLoadFlags
+    catchAny (iconThemeLoadIcon themeForIcon targetName size themeLoadFlags)
+             (const $ pure Nothing)
 
   else do
     trayLogger DEBUG $ printf "Trying to load icon %s as filepath" name
