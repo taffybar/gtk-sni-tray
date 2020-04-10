@@ -120,6 +120,13 @@ startWatcherP =
   <> help "Start a Watcher to handle SNI registration if one does not exist"
   )
 
+noStrutP :: Parser Bool
+noStrutP =
+  switch
+  (  long "no-strut"
+  <> help "Do not set strut properties for the gtk window"
+  )
+
 barLengthP :: Parser Rational
 barLengthP =
   option auto
@@ -154,11 +161,12 @@ buildWindows :: StrutPosition
              -> Maybe String
              -> Bool
              -> Bool
+             -> Bool
              -> Rational
              -> Rational
              -> IO ()
 buildWindows pos align size padding monitors priority maybeColorString expand
-             startWatcher length overlayScale = do
+             startWatcher noStrut length overlayScale = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -208,7 +216,8 @@ buildWindows pos align size padding monitors priority maybeColorString expand
             , trayOverlayScale = overlayScale
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
-        setupStrutWindow config window
+        when (not noStrut) $
+             setupStrutWindow config window
         maybe
           (makeWindowTransparent window)
           (getColor >=>
@@ -228,7 +237,7 @@ parser :: Parser (IO ())
 parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
   monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*>
-  barLengthP <*> overlayScaleP
+  noStrutP <*> barLengthP <*> overlayScaleP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption
