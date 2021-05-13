@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE CPP #-}
 module StatusNotifier.Tray where
 
 import           Control.Concurrent.MVar as MV
@@ -123,7 +124,12 @@ getIconPixbufByName size name themePath = do
     maybeFile <- if fileExists
     then return $ Just nameString
     else fmap join $ sequenceA $ getIconPathFromThemePath nameString <$> themePath
-    sequenceA $ pixbufNewFromFile <$> maybeFile
+#if MIN_VERSION_gi_gdkpixbuf(2,0,26)
+    let handleResult = fmap join . sequenceA
+#else
+    let handleResult = sequenceA
+#endif
+    handleResult $ pixbufNewFromFile <$> maybeFile
 
 getIconPathFromThemePath :: String -> String -> IO (Maybe String)
 getIconPathFromThemePath name themePath = if name == "" then return Nothing else do
@@ -257,8 +263,9 @@ buildTray TrayParams { trayHost = Host
                           in return (thisTime, thisTime /= previous)
 
                         trayLogger DEBUG $
-                                   printf "Allocating image size %s, width %s, \
-                                           \ height %s, resize %s"
+                                   printf
+                                   ("Allocating image size %s, width %s," <>
+                                    " height %s, resize %s")
                                    (show size)
                                    (show actualWidth)
                                    (show actualHeight)
