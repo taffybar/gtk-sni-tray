@@ -12,6 +12,7 @@ import           DBus.Client
 import qualified DBus.Internal.Types as DBusTypes
 import qualified Data.ByteString as BS
 import           Data.Coerce
+import           Data.Foldable (traverse_)
 import           Data.Int
 import           Data.List
 import qualified Data.Map.Strict as Map
@@ -24,6 +25,7 @@ import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
 import           GI.Gdk.Enums
 import           GI.Gdk.Objects.Screen
+import           GI.Gdk.Structs.EventScroll
 import           GI.GdkPixbuf.Enums
 import           GI.GdkPixbuf.Objects.Pixbuf
 import qualified GI.Gtk as Gtk
@@ -244,6 +246,7 @@ buildTray TrayParams { trayHost = Host
           trayLogger INFO logText
 
           button <- Gtk.eventBoxNew
+          Gtk.widgetAddEvents button [Gdk.EventMaskScrollMask]
 
           image <-
             case imageSize of
@@ -317,6 +320,24 @@ buildTray TrayParams { trayHost = Host
               activateItem = void $ IC.activate client serviceName servicePath 0 0
 
           _ <- Gtk.onWidgetButtonPressEvent button $ const popupItemMenu
+          _ <- Gtk.onWidgetScrollEvent button $ \event -> do
+            direction <- getEventScrollDirection event
+            let direction' = case direction of
+                               ScrollDirectionUp -> Just "vertical"
+                               ScrollDirectionDown -> Just "vertical"
+                               ScrollDirectionLeft -> Just "horizontal"
+                               ScrollDirectionRight -> Just "horizontal"
+                               _ -> Nothing
+                -- deltaX/deltaY are provided only in case of smooth scrolling which
+                -- is enabled via additional flag, we don't to enable/handle it
+                delta = case direction of
+                          ScrollDirectionUp -> -1
+                          ScrollDirectionDown -> 1
+                          ScrollDirectionLeft -> -1
+                          ScrollDirectionRight -> 1
+                          _ -> 0
+            traverse_ (IC.scroll client serviceName servicePath delta) direction'
+            return False
 
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
 
