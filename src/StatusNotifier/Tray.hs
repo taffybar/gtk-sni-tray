@@ -165,6 +165,8 @@ data ItemContext = ItemContext
 
 data TrayImageSize = Expand | TrayImageSize Int32
 
+data TrayClickAction = Activate | SecondaryActivate | PopupMenu
+
 data TrayParams = TrayParams
   { trayHost :: Host
   , trayClient :: Client
@@ -173,6 +175,9 @@ data TrayParams = TrayParams
   , trayIconExpand :: Bool
   , trayAlignment :: StrutAlignment
   , trayOverlayScale :: Rational
+  , trayLeftClickAction :: TrayClickAction
+  , trayMiddleClickAction :: TrayClickAction
+  , trayRightClickAction :: TrayClickAction
   }
 
 buildTray :: TrayParams -> IO Gtk.Box
@@ -187,6 +192,9 @@ buildTray TrayParams { trayHost = Host
                      , trayIconExpand = shouldExpand
                      , trayAlignment = alignment
                      , trayOverlayScale = overlayScale
+                     , trayLeftClickAction = leftClickAction
+                     , trayMiddleClickAction = middleClickAction
+                     , trayRightClickAction = rightClickAction
                      } = do
   trayLogger INFO "Building tray"
 
@@ -320,11 +328,16 @@ buildTray TrayParams { trayHost = Host
             button <- Gdk.getEventButtonButton event
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
-            case button of
-              1 -> void $ IC.activate client serviceName servicePath x y
-              2 -> void $ IC.secondaryActivate client serviceName servicePath x y
-              3 -> maybe (return ()) popupItemForMenu maybeMenu
-              _ -> return ()
+            let action =
+                  case button of
+                    1 -> leftClickAction
+                    2 -> middleClickAction
+                    3 -> rightClickAction
+            case action of
+              Activate -> void $ IC.activate client serviceName servicePath x y
+              SecondaryActivate -> void $ IC.secondaryActivate client
+                                   serviceName servicePath x y
+              PopupMenu -> maybe (return ()) popupItemForMenu maybeMenu
             return False
           _ <- Gtk.onWidgetScrollEvent button $ \event -> do
             direction <- getEventScrollDirection event

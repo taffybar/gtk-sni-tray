@@ -214,6 +214,9 @@ buildWindows pos align size padding monitors priority maybeColorString expand
             , trayIconExpand = expand
             , trayAlignment = align
             , trayOverlayScale = overlayScale
+            , trayLeftClickAction = Activate
+            , trayMiddleClickAction = SecondaryActivate
+            , trayRightClickAction = PopupMenu
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         when (not noStrut) $
