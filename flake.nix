@@ -3,7 +3,7 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     git-ignore-nix.url = "github:IvanMalison/gitignore.nix/master";
-    status-notifier-item.url = "github:taffybar/status-notifier-item";
+    status-notifier-item.url = "github:taffybar/status-notifier-item/master";
   };
   outputs = { self, flake-utils, nixpkgs, git-ignore-nix, status-notifier-item }:
   let
