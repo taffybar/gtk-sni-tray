@@ -18,6 +18,7 @@ import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe
 import           Data.Ord
+import           Data.Ratio
 import qualified Data.Text as T
 import qualified GI.DbusmenuGtk3.Objects.Menu as DM
 import qualified GI.GLib as GLib
@@ -168,9 +169,7 @@ data TrayImageSize = Expand | TrayImageSize Int32
 data TrayClickAction = Activate | SecondaryActivate | PopupMenu
 
 data TrayParams = TrayParams
-  { trayHost :: Host
-  , trayClient :: Client
-  , trayOrientation :: Gtk.Orientation
+  { trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
   , trayIconExpand :: Bool
   , trayAlignment :: StrutAlignment
@@ -180,14 +179,25 @@ data TrayParams = TrayParams
   , trayRightClickAction :: TrayClickAction
   }
 
-buildTray :: TrayParams -> IO Gtk.Box
-buildTray TrayParams { trayHost = Host
-                       { itemInfoMap = getInfoMap
-                       , addUpdateHandler = addUHandler
-                       , removeUpdateHandler = removeUHandler
-                       }
-                     , trayClient = client
-                     , trayOrientation = orientation
+defaultTrayParams = TrayParams
+  { trayOrientation = Gtk.OrientationHorizontal
+  , trayImageSize = Expand
+  , trayIconExpand = False
+  , trayAlignment = End
+  , trayOverlayScale = 3 % 5
+  , trayLeftClickAction = Activate
+  , trayMiddleClickAction = SecondaryActivate
+  , trayRightClickAction = PopupMenu
+  }
+
+buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
+buildTray Host
+            { itemInfoMap = getInfoMap
+            , addUpdateHandler = addUHandler
+            , removeUpdateHandler = removeUHandler
+            }
+          client
+          TrayParams { trayOrientation = orientation
                      , trayImageSize = imageSize
                      , trayIconExpand = shouldExpand
                      , trayAlignment = alignment

@@ -205,11 +205,9 @@ buildWindows pos align size padding monitors priority maybeColorString expand
                 BottomPos -> Gtk.OrientationHorizontal
                 _ -> Gtk.OrientationVertical
         tray <-
-          buildTray
+          buildTray host client
             TrayParams
-            { trayClient = client
-            , trayOrientation = orientation
-            , trayHost = host
+            { trayOrientation = orientation
             , trayImageSize = Expand
             , trayIconExpand = expand
             , trayAlignment = align
