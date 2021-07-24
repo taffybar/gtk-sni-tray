@@ -3,8 +3,9 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     git-ignore-nix.url = "github:IvanMalison/gitignore.nix/master";
+    status-notifier-item.url = "github:taffybar/status-notifier-item";
   };
-  outputs = { self, flake-utils, nixpkgs, git-ignore-nix }:
+  outputs = { self, flake-utils, nixpkgs, git-ignore-nix, status-notifier-item }:
   let
     overlay = final: prev: {
       haskellPackages = prev.haskellPackages.override (old: {
@@ -17,7 +18,7 @@
         });
       });
     };
-    overlays = [overlay];
+    overlays = [ overlay status-notifier-item.overlay ];
   in flake-utils.lib.eachDefaultSystem (system:
   let pkgs = import nixpkgs { inherit system overlays; config.allowBroken = true; };
   in

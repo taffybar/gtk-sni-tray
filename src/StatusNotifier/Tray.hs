@@ -211,7 +211,10 @@ buildTray TrayParams { trayHost = Host
           _ ->
             Gdk.getRectangleWidth rectangle
 
-      getInfo def name = fromMaybe def . Map.lookup name <$> getInfoMap
+      getInfoAttr fn def name = maybe def fn . Map.lookup name <$> getInfoMap
+
+      getInfo :: ItemInfo -> DBusTypes.BusName -> IO ItemInfo
+      getInfo = getInfoAttr id
 
       updateIconFromInfo info@ItemInfo { itemServiceName = name } =
         getContext name >>= updateIcon
@@ -328,7 +331,8 @@ buildTray TrayParams { trayHost = Host
             button <- Gdk.getEventButtonButton event
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
-            let action =
+            isMenu <- getInfoAttr itemIsMenu False serviceName
+            let action = if isMenu then PopupMenu else
                   case button of
                     1 -> leftClickAction
                     2 -> middleClickAction
@@ -417,10 +421,12 @@ buildTray TrayParams { trayHost = Host
                                       } = getPixBufFrom size name mpath pixmaps
 
       getOverlayPixBufFromInfo size
-                               info@ItemInfo { overlayIconName = name
-                                             , iconThemePath = mpath
-                                             , overlayIconPixmaps = pixmaps
-                                             } = getPixBufFrom size (fromMaybe "" name) mpath pixmaps
+                               info@ItemInfo
+                                     { overlayIconName = name
+                                     , iconThemePath = mpath
+                                     , overlayIconPixmaps = pixmaps
+                                     } = getPixBufFrom size (fromMaybe "" name)
+                               mpath pixmaps
 
       getPixBufFrom size name mpath pixmaps = do
         let tooSmall (w, h, _) = w < size || h < size
