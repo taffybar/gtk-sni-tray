@@ -55,7 +55,7 @@ getScaledWidthHeight shouldTargetWidth targetSize width height =
       getRatio toScale =
         fromIntegral targetSize / fromIntegral toScale
       getOther :: Int32 -> Int32 -> Int32
-      getOther toScale other = floor $ getRatio toScale * fromIntegral other
+      getOther toScale other = max 1 $ floor $ getRatio toScale * fromIntegral other
   in
     if shouldTargetWidth
     then (targetSize, getOther width height)
