@@ -10,6 +10,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           DBus.Client
 import qualified DBus.Internal.Types as DBusTypes
+import           Data.Bool (bool)
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
@@ -341,12 +342,10 @@ buildTray Host
             button <- Gdk.getEventButtonButton event
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
-            isMenu <- getInfoAttr itemIsMenu False serviceName
-            let action = if isMenu then PopupMenu else
-                  case button of
-                    1 -> leftClickAction
-                    2 -> middleClickAction
-                    3 -> rightClickAction
+            action <- case button of
+              1 -> bool leftClickAction PopupMenu <$> getInfoAttr itemIsMenu True serviceName
+              2 -> return middleClickAction
+              3 -> return rightClickAction
             case action of
               Activate -> void $ IC.activate client serviceName servicePath x y
               SecondaryActivate -> void $ IC.secondaryActivate client
