@@ -345,7 +345,7 @@ buildTray Host
             action <- case button of
               1 -> bool leftClickAction PopupMenu <$> getInfoAttr itemIsMenu True serviceName
               2 -> return middleClickAction
-              3 -> return rightClickAction
+              _ -> return rightClickAction
             case action of
               Activate -> void $ IC.activate client serviceName servicePath x y
               SecondaryActivate -> void $ IC.secondaryActivate client
