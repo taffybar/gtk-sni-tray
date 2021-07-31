@@ -1,5 +1,6 @@
 gtk-sni-tray
-===============
+============
+![Build Status](https://github.com/taffybar/gtk-sni-tray/actions/workflows/build.yml/badge.svg)
 
 gtk-sni-tray provides a [StatusNotifierHost](https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/StatusNotifierHost/) widget written using the gtk+3 bindings for haskell provided by [gi-gtk](https://hackage.haskell.org/package/gi-gtk). It also provides a simple standalone executable, `gtk-sni-tray-standalone`, that is configured with command line arguments. This executable will run the aforementioned widget by itself in a strut window, on each monitor for each it is requested.
 
