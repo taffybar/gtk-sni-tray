@@ -71,7 +71,8 @@ scalePixbufToSize size orientation pixbuf = do
       targetWidth = case orientation of
                       Gtk.OrientationHorizontal -> False
                       _ -> True
-      (scaledWidth, scaledHeight) = getScaledWidthHeight targetWidth size width height
+      (scaledWidth, scaledHeight) =
+        getScaledWidthHeight targetWidth size width height
   trayLogger DEBUG $
              printf
              "Scaling pb to %s, actualW: %s, actualH: %s, scaledW: %s, scaledH: %s"
@@ -298,7 +299,8 @@ buildTray Host
 
                         when requestResize $ do
                           trayLogger DEBUG "Requesting resize"
-                          pixBuf <- getInfo info serviceName >>= getScaledPixBufFromInfo size
+                          pixBuf <- getInfo info serviceName >>=
+                                    getScaledPixBufFromInfo size
                           when (isNothing pixBuf) $
                                trayLogger WARNING $
                                           printf "Got null pixbuf for info %s" $
@@ -343,7 +345,8 @@ buildTray Host
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
             action <- case button of
-              1 -> bool leftClickAction PopupMenu <$> getInfoAttr itemIsMenu True serviceName
+              1 -> bool leftClickAction PopupMenu <$> getInfoAttr
+                   itemIsMenu True serviceName
               2 -> return middleClickAction
               _ -> return rightClickAction
             case action of
@@ -384,7 +387,7 @@ buildTray Host
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget
         where removeWidget Nothing =
-                trayLogger INFO "Attempt to remove widget with unrecognized service name."
+                trayLogger WARNING "removeWidget: unrecognized service name."
               removeWidget (Just ItemContext { contextButton = widgetToRemove }) =
                 do
                   Gtk.containerRemove trayBox widgetToRemove
@@ -394,7 +397,8 @@ buildTray Host
       updateHandler OverlayIconUpdated i = updateIconFromInfo i
 
       updateHandler ToolTipUpdated info@ItemInfo { itemServiceName = name } =
-        void $ getContext name >>= traverse (flip setTooltipText info . contextButton)
+        void $ getContext name >>=
+             traverse (flip setTooltipText info . contextButton)
 
       updateHandler _ _ = return ()
 
