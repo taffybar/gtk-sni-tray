@@ -14,7 +14,7 @@
           gtk-sni-tray =
             hself.callCabal2nix "gtk-sni-tray"
             (git-ignore-nix.gitIgnoreSource ./.)
-            { inherit (final) gtk3;  };
+            { inherit (final) gtk3; };
         });
       });
     };
