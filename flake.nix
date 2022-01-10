@@ -2,7 +2,7 @@
   description = "gtk-sni-tray";
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    git-ignore-nix.url = "github:IvanMalison/gitignore.nix/master";
+    git-ignore-nix.url = github:hercules-ci/gitignore.nix/master;
     status-notifier-item.url = "github:taffybar/status-notifier-item/master";
   };
   outputs = { self, flake-utils, nixpkgs, git-ignore-nix, status-notifier-item }:
@@ -13,8 +13,8 @@
         (hself: hsuper: {
           gtk-sni-tray =
             hself.callCabal2nix "gtk-sni-tray"
-            (git-ignore-nix.gitIgnoreSource ./.)
-            { inherit (final) gtk3; };
+            (git-ignore-nix.lib.gitignoreSource ./.)
+            { inherit (final) gtk3;  };
         });
       });
     };
