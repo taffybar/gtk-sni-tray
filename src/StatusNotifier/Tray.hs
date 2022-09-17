@@ -4,6 +4,7 @@
 module StatusNotifier.Tray where
 
 import           Control.Concurrent.MVar as MV
+import           Control.Exception.Base
 import           Control.Exception.Enclosed (catchAny)
 import           Control.Monad
 import           Control.Monad.Trans.Class
@@ -14,6 +15,7 @@ import           Data.Bool (bool)
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
+import           Data.GI.Base.GError
 import           Data.Int
 import           Data.List
 import qualified Data.Map.Strict as Map
@@ -29,7 +31,7 @@ import           GI.Gdk.Enums
 import           GI.Gdk.Objects.Screen
 import           GI.Gdk.Structs.EventScroll
 import           GI.GdkPixbuf.Enums
-import           GI.GdkPixbuf.Objects.Pixbuf
+import           GI.GdkPixbuf.Objects.Pixbuf as Gdk
 import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
 import           GI.Gtk.Objects.IconTheme
@@ -102,6 +104,26 @@ getThemeWithDefaultFallbacks themePath = do
 
   return themeForIcon
 
+catchGErrorsAsLeft :: IO a -> IO (Either GError a)
+catchGErrorsAsLeft action = catch (Right <$> action) (return . Left)
+
+catchGErrorsAsNothing :: IO a -> IO (Maybe a)
+catchGErrorsAsNothing action = catchGErrorsAsLeft action >>= rightToJustLogLeft
+       where rightToJustLogLeft (Right value) = return $ Just value
+             rightToJustLogLeft (Left error) = do
+               trayLogger WARNING $ printf "Encountered error: %s" $ show error
+               return Nothing
+
+safePixbufNewFromFile :: FilePath -> IO (Maybe Gdk.Pixbuf)
+safePixbufNewFromFile =
+  handleResult . catchGErrorsAsNothing . Gdk.pixbufNewFromFile
+  where
+#if MIN_VERSION_gi_gdkpixbuf(2,0,26)
+    handleResult = fmap join
+#else
+    handleResult = id
+#endif
+
 getIconPixbufByName :: Int32 -> T.Text -> Maybe String -> IO (Maybe Pixbuf)
 getIconPixbufByName size name themePath = do
   trayLogger DEBUG $ printf "Getting Pixbuf from name for %s" name
@@ -134,7 +156,7 @@ getIconPixbufByName size name themePath = do
 #else
     let handleResult = sequenceA
 #endif
-    handleResult $ pixbufNewFromFile <$> maybeFile
+    handleResult $ safePixbufNewFromFile <$> maybeFile
 
 getIconPathFromThemePath :: String -> String -> IO (Maybe String)
 getIconPathFromThemePath name themePath = if name == "" then return Nothing else do
