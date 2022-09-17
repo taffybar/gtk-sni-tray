@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.8.0
+version:             0.1.8.1
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
@@ -28,10 +28,10 @@ library:
     - gi-cairo-render
     - gi-cairo-connector
     - gi-dbusmenugtk3
-    - gi-gdk
+    - gi-gdk >= 3.0.25 && < 4
     - gi-gdkpixbuf >= 2.0.16
     - gi-glib
-    - gi-gtk >= 3.0.21
+    - gi-gtk >= 3.0.38 && < 4
     - gtk-strut >= 0.1.2.1
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
