@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.8.1
+version:             0.1.9.0
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
