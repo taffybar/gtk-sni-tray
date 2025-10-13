@@ -1,0 +1,85 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.38.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           gtk-sni-tray
+version:        0.1.9.0
+synopsis:       A standalone StatusNotifierItem/AppIndicator tray
+description:    Please see the README on Github at <https://github.com/IvanMalison/gtk-sni-tray#readme>
+category:       System
+homepage:       https://github.com/IvanMalison/gtk-sni-tray#readme
+bug-reports:    https://github.com/IvanMalison/gtk-sni-tray/issues
+author:         Ivan Malison
+maintainer:     IvanMalison@gmail.com
+copyright:      2018 Ivan Malison
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/IvanMalison/gtk-sni-tray
+
+library
+  exposed-modules:
+      StatusNotifier.TransparentWindow
+      StatusNotifier.Tray
+  other-modules:
+      Paths_gtk_sni_tray
+  hs-source-dirs:
+      src
+  pkgconfig-depends:
+      gtk+-3.0
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , dbus >=1.0.0 && <2.0.0
+    , directory
+    , enclosed-exceptions >=1.0.0.1
+    , filepath
+    , gi-cairo
+    , gi-cairo-connector
+    , gi-cairo-render
+    , gi-dbusmenugtk3
+    , gi-gdk3
+    , gi-gdkpixbuf >=2.0.16
+    , gi-glib
+    , gi-gtk3
+    , gtk-strut >=0.1.4.0
+    , haskell-gi >=0.21.2
+    , haskell-gi-base >=0.21.1
+    , hslogger
+    , status-notifier-item >=0.3.0.1 && <0.4.0.0
+    , text
+    , transformers
+    , transformers-base >=0.4
+    , unix
+  default-language: Haskell2010
+
+executable gtk-sni-tray-standalone
+  main-is: Main.hs
+  other-modules:
+      Paths_gtk_sni_tray
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base
+    , dbus
+    , dbus-hslogger >=0.1.0.1 && <0.2.0.0
+    , gi-gdk3
+    , gi-gtk3
+    , gtk-sni-tray
+    , gtk-strut
+    , hslogger
+    , optparse-applicative
+    , status-notifier-item
+    , text
+    , unix
+  default-language: Haskell2010
