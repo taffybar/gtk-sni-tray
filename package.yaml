@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.8.1
+version:             0.1.9.0
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
@@ -32,7 +32,7 @@ library:
     - gi-gdkpixbuf >= 2.0.16
     - gi-glib
     - gi-gtk3
-    - gtk-strut >= 0.1.2.1
+    - gtk-strut >= 0.1.4.0
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
     - hslogger
@@ -54,8 +54,8 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - base >= 4.7 && < 5
-      - dbus >= 1.0.0 && < 2.0.0
+      - base
+      - dbus
       - dbus-hslogger >= 0.1.0.1 && < 0.2.0.0
       - gi-gdk3
       - gi-gtk3
@@ -63,6 +63,6 @@ executables:
       - gtk-strut
       - hslogger
       - optparse-applicative
-      - status-notifier-item >= 0.3.1.0 && < 0.4.0.0
+      - status-notifier-item
       - text
       - unix
