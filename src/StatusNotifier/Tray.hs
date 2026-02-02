@@ -15,6 +15,7 @@ import           Data.Bool (bool)
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
+import           Data.GI.Base (unsafeCastTo)
 import           Data.GI.Base.GError
 import           Data.Int
 import           Data.List
@@ -358,8 +359,10 @@ buildTray Host
                             , contextImage = image
                             , contextButton = button
                             }
-              popupItemForMenu menu =
-                Gtk.menuPopupAtWidget menu image
+              popupItemForMenu menu = do
+                -- Cast DM.Menu to Gtk.Menu for menuPopupAtWidget
+                gtkMenu <- unsafeCastTo Gtk.Menu menu
+                Gtk.menuPopupAtWidget gtkMenu image
                    GravitySouthWest GravityNorthWest Nothing
 
           _ <- Gtk.onWidgetButtonPressEvent button $ \event -> do
