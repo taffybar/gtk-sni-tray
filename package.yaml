@@ -36,7 +36,7 @@ library:
     - haskell-gi >= 0.21.2
     - haskell-gi-base >= 0.21.1
     - hslogger
-    - status-notifier-item >= 0.3.0.1 && < 0.4.0.0
+    - status-notifier-item >= 0.3.2.0 && < 0.4.0.0
     - text
     - transformers
     - transformers-base >= 0.4
@@ -57,8 +57,10 @@ executables:
       - base
       - dbus
       - dbus-hslogger >= 0.1.0.1 && < 0.2.0.0
+      - containers
       - gi-gdk3
       - gi-gtk3
+      - gi-gtk-layer-shell
       - gtk-sni-tray
       - gtk-strut
       - hslogger

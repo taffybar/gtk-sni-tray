@@ -32,9 +32,17 @@
   {
     devShells.default = pkgs.haskellPackages.shellFor {
       packages = p: [ p.gtk-sni-tray ];
+      buildInputs = with pkgs; [
+        gtk-layer-shell
+      ];
       nativeBuildInputs = with pkgs.haskellPackages; [
         cabal-install haskell-language-server
       ];
+      shellHook = ''
+        # ld.gold has been observed to crash (Bus error) on some systems during
+        # GHC links. Prefer the more conservative bfd linker.
+        export NIX_LDFLAGS="''${NIX_LDFLAGS:-} -fuse-ld=bfd"
+      '';
     };
     packages.default = pkgs.haskellPackages.gtk-sni-tray;
   }) // {

@@ -16,6 +16,7 @@ import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
 import           Data.GI.Base (unsafeCastTo)
+import qualified Data.GI.Base.ManagedPtr as ManagedPtr
 import           Data.GI.Base.GError
 import           Data.Int
 import           Data.List
@@ -43,6 +44,7 @@ import           System.Directory
 import           System.FilePath
 import           System.Log.Logger
 import           Text.Printf
+import           Foreign.Ptr (Ptr)
 
 trayLogger :: Priority -> String -> IO ()
 trayLogger = logM "StatusNotifier.Tray"
@@ -291,8 +293,8 @@ buildTray Host
 
           trayLogger INFO logText
 
-          button <- Gtk.eventBoxNew
-          Gtk.widgetAddEvents button [Gdk.EventMaskScrollMask]
+          eventBox <- Gtk.eventBoxNew
+          Gtk.widgetAddEvents eventBox [Gdk.EventMaskScrollMask]
 
           image <-
             case imageSize of
@@ -347,8 +349,8 @@ buildTray Host
           Gtk.widgetGetStyleContext image >>=
              flip Gtk.styleContextAddClass "tray-icon-image"
 
-          Gtk.containerAdd button image
-          setTooltipText button info
+          Gtk.containerAdd eventBox image
+          setTooltipText eventBox info
 
           maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
                        T.pack <$> serviceMenuPathStr
@@ -357,19 +359,27 @@ buildTray Host
                 ItemContext { contextName = serviceName
                             , contextMenu = maybeMenu
                             , contextImage = image
-                            , contextButton = button
+                            , contextButton = eventBox
                             }
-              popupItemForMenu menu = do
+              popupItemForMenu menu triggerEvent = do
                 -- Cast DM.Menu to Gtk.Menu for menuPopupAtWidget
                 gtkMenu <- unsafeCastTo Gtk.Menu menu
-                Gtk.menuPopupAtWidget gtkMenu image
-                   GravitySouthWest GravityNorthWest Nothing
+                -- On Wayland (e.g. Hyprland) popups need the triggering input
+                -- event so GTK can associate the popup with the correct seat/
+                -- serial. Also, anchor to the EventBox rather than the Image
+                -- (GtkImage is typically "no-window"), or the popup may be
+                -- positioned/realized incorrectly.
+                Gtk.widgetShowAll gtkMenu
+                evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
+                ManagedPtr.withTransient evPtr $ \ev ->
+                  Gtk.menuPopupAtWidget gtkMenu eventBox
+                    GravitySouthWest GravityNorthWest (Just ev)
 
-          _ <- Gtk.onWidgetButtonPressEvent button $ \event -> do
-            button <- Gdk.getEventButtonButton event
+          _ <- Gtk.onWidgetButtonPressEvent eventBox $ \event -> do
+            mouseButton <- Gdk.getEventButtonButton event
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
-            action <- case button of
+            action <- case mouseButton of
               1 -> bool leftClickAction PopupMenu <$> getInfoAttr
                    itemIsMenu True serviceName
               2 -> return middleClickAction
@@ -378,9 +388,9 @@ buildTray Host
               Activate -> void $ IC.activate client serviceName servicePath x y
               SecondaryActivate -> void $ IC.secondaryActivate client
                                    serviceName servicePath x y
-              PopupMenu -> maybe (return ()) popupItemForMenu maybeMenu
+              PopupMenu -> maybe (return ()) (`popupItemForMenu` event) maybeMenu
             return False
-          _ <- Gtk.onWidgetScrollEvent button $ \event -> do
+          _ <- Gtk.onWidgetScrollEvent eventBox $ \event -> do
             direction <- getEventScrollDirection event
             let direction' = case direction of
                                ScrollDirectionUp -> Just "vertical"
@@ -401,13 +411,13 @@ buildTray Host
 
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
 
-          Gtk.widgetShowAll button
+          Gtk.widgetShowAll eventBox
           let packFn =
                 case alignment of
                   End -> Gtk.boxPackEnd
                   _ -> Gtk.boxPackStart
 
-          packFn trayBox button shouldExpand True 0
+          packFn trayBox eventBox shouldExpand True 0
 
       updateHandler ItemRemoved ItemInfo { itemServiceName = name }
         = getContext name >>= removeWidget

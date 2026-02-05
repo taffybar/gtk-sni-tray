@@ -4,11 +4,14 @@ module Main where
 import           Control.Monad
 import           DBus.Client
 import           Data.Int
+import           Data.Char (toLower)
 import           Data.Maybe
 import           Data.Ratio
 import           Data.Semigroup ((<>))
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import           Data.Version (showVersion)
+import qualified DBus as DBus
 import qualified GI.Gdk as Gdk
 import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
@@ -18,9 +21,330 @@ import           StatusNotifier.TransparentWindow
 import           StatusNotifier.Tray
 import           System.Log.Logger
 import           System.Posix.Process
+import           System.Environment (lookupEnv)
+import           System.Exit (exitFailure)
 import           Text.Printf
 
 import           Paths_gtk_sni_tray (version)
+
+import qualified GI.GtkLayerShell as GtkLayerShell
+
+data Backend = BackendX11 | BackendWayland deriving (Eq, Show)
+
+data BackendChoice = BackendAuto | BackendX11Choice | BackendWaylandChoice
+  deriving (Eq, Show, Read)
+
+detectBackend :: IO Backend
+detectBackend = do
+  supported <- GtkLayerShell.isSupported
+  pure $ if supported then BackendWayland else BackendX11
+
+backendChoiceP :: Parser BackendChoice
+backendChoiceP =
+  option (eitherReader parseBackendChoice)
+  (  long "backend"
+  <> help "Backend selection: auto | x11 | wayland"
+  <> value BackendAuto
+  <> metavar "BACKEND"
+  )
+  where
+    parseBackendChoice s =
+      case map toLower s of
+        "auto" -> Right BackendAuto
+        "x11" -> Right BackendX11Choice
+        "wayland" -> Right BackendWaylandChoice
+        _ -> Left "expected one of: auto, x11, wayland"
+
+logRuntimeInfo :: BackendChoice -> Backend -> IO ()
+logRuntimeInfo backendChoice backend = do
+  sessionType <- lookupEnv "XDG_SESSION_TYPE"
+  waylandDisplay <- lookupEnv "WAYLAND_DISPLAY"
+  gdkBackend <- lookupEnv "GDK_BACKEND"
+  mDisplay <- Gdk.displayGetDefault
+  displayName <- case mDisplay of
+    Nothing -> pure Nothing
+    Just d -> Just <$> Gdk.displayGetName d
+  layerShellSupported <- GtkLayerShell.isSupported
+  logM "StatusNotifier.StandaloneWindow" INFO $
+    printf "backendChoice=%s backend=%s layerShellSupported=%s XDG_SESSION_TYPE=%s WAYLAND_DISPLAY=%s GDK_BACKEND=%s gdkDisplay=%s"
+      (show backendChoice)
+      (show backend)
+      (show layerShellSupported)
+      (show sessionType)
+      (show waylandDisplay)
+      (show gdkBackend)
+      (show displayName)
+
+hasStatusNotifierWatcher :: Client -> IO Bool
+hasStatusNotifierWatcher client = do
+  let mc =
+        (DBus.methodCall dbusPath
+          (DBus.interfaceName_ "org.freedesktop.DBus")
+          (DBus.memberName_ "NameHasOwner"))
+        { DBus.methodCallDestination = Just dbusName
+        , DBus.methodCallBody = [DBus.toVariant ("org.kde.StatusNotifierWatcher" :: String)]
+        }
+  reply <- call_ client mc
+  case DBus.methodReturnBody reply of
+    [v] -> pure $ fromMaybe False (DBus.fromVariant v)
+    _ -> pure False
+
+setupLayerShellWindow :: StrutConfig -> Gtk.Window -> Bool -> IO ()
+setupLayerShellWindow StrutConfig
+                      { strutWidth = widthSize
+                      , strutHeight = heightSize
+                      , strutXPadding = xpadding
+                      , strutYPadding = ypadding
+                      , strutMonitor = monitorNumber
+                      , strutPosition = position
+                      , strutAlignment = alignment
+                      , strutDisplayName = maybeDisplayName
+                      } window reserveSpace = do
+  supported <- GtkLayerShell.isSupported
+  unless supported $
+    logM "StatusNotifier.StandaloneWindow" WARNING $
+      "Wayland detected, but gtk-layer-shell is not supported; falling back to a regular toplevel window"
+  when supported $ do
+    Gtk.windowSetDecorated window False
+
+    maybeDisplay <- maybe Gdk.displayGetDefault Gdk.displayOpen maybeDisplayName
+    case maybeDisplay of
+      Nothing -> logM "StatusNotifier.StandaloneWindow" WARNING "Failed to get GDK display for layer-shell"
+      Just display -> do
+        nMonitors <- Gdk.displayGetNMonitors display
+        logM "StatusNotifier.StandaloneWindow" INFO $ printf "GDK monitors reported: %d" nMonitors
+
+        let tryIndex idx = if idx < 0 || idx >= nMonitors then pure Nothing else Gdk.displayGetMonitor display idx
+
+        mPrimary <- Gdk.displayGetPrimaryMonitor display
+        mChosen <- case monitorNumber of
+          Nothing -> pure mPrimary
+          Just idx -> tryIndex idx
+
+        monitor <-
+          case mChosen <|> mPrimary of
+            Just m -> pure (Just m)
+            Nothing -> tryIndex 0
+
+        GtkLayerShell.initForWindow window
+        GtkLayerShell.setKeyboardMode window GtkLayerShell.KeyboardModeNone
+        GtkLayerShell.setNamespace window (T.pack "gtk-sni-tray")
+        GtkLayerShell.setLayer window GtkLayerShell.LayerTop
+
+        -- Default behavior if monitor info isn't available: behave like a full-width/height panel.
+        GtkLayerShell.setMargin window GtkLayerShell.EdgeLeft xpadding
+        GtkLayerShell.setMargin window GtkLayerShell.EdgeRight xpadding
+        GtkLayerShell.setMargin window GtkLayerShell.EdgeTop ypadding
+        GtkLayerShell.setMargin window GtkLayerShell.EdgeBottom ypadding
+
+        let setAnchor = GtkLayerShell.setAnchor window
+        case position of
+          TopPos -> do
+            setAnchor GtkLayerShell.EdgeTop True
+            setAnchor GtkLayerShell.EdgeBottom False
+            setAnchor GtkLayerShell.EdgeLeft True
+            setAnchor GtkLayerShell.EdgeRight True
+          BottomPos -> do
+            setAnchor GtkLayerShell.EdgeTop False
+            setAnchor GtkLayerShell.EdgeBottom True
+            setAnchor GtkLayerShell.EdgeLeft True
+            setAnchor GtkLayerShell.EdgeRight True
+          LeftPos -> do
+            setAnchor GtkLayerShell.EdgeLeft True
+            setAnchor GtkLayerShell.EdgeRight False
+            setAnchor GtkLayerShell.EdgeTop True
+            setAnchor GtkLayerShell.EdgeBottom True
+          RightPos -> do
+            setAnchor GtkLayerShell.EdgeLeft False
+            setAnchor GtkLayerShell.EdgeRight True
+            setAnchor GtkLayerShell.EdgeTop True
+            setAnchor GtkLayerShell.EdgeBottom True
+
+        let fallbackExclusive =
+              if reserveSpace
+              then case position of
+                     TopPos -> case heightSize of ExactSize h -> h + 2 * ypadding; _ -> 0
+                     BottomPos -> case heightSize of ExactSize h -> h + 2 * ypadding; _ -> 0
+                     LeftPos -> case widthSize of ExactSize w -> w + 2 * xpadding; _ -> 0
+                     RightPos -> case widthSize of ExactSize w -> w + 2 * xpadding; _ -> 0
+              else 0
+        GtkLayerShell.setExclusiveZone window fallbackExclusive
+
+        case monitor of
+          Nothing -> logM "StatusNotifier.StandaloneWindow" WARNING "Failed to select a GDK monitor for layer-shell; using fallback sizing/anchors"
+          Just m -> do
+            GtkLayerShell.setMonitor window m
+            isPrim <- Gdk.monitorIsPrimary m
+            model <- Gdk.monitorGetModel m
+            manuf <- Gdk.monitorGetManufacturer m
+            logM "StatusNotifier.StandaloneWindow" INFO $
+              printf "Using monitor primary=%s manufacturer=%s model=%s"
+                (show isPrim) (show manuf) (show model)
+
+            monitorGeometry <- Gdk.monitorGetGeometry m
+            monitorWidth <- Gdk.getRectangleWidth monitorGeometry
+            monitorHeight <- Gdk.getRectangleHeight monitorGeometry
+            let availableWidth = monitorWidth - (2 * xpadding)
+                availableHeight = monitorHeight - (2 * ypadding)
+                width =
+                  case widthSize of
+                    ExactSize w -> w
+                    ScreenRatio p ->
+                      floor $ p * fromIntegral availableWidth
+                height =
+                  case heightSize of
+                    ExactSize h -> h
+                    ScreenRatio p ->
+                      floor $ p * fromIntegral availableHeight
+                clampNonNegative x = if x < 0 then 0 else x
+                centerOffset availSize size =
+                  clampNonNegative $ (availSize - size) `div` 2
+                endOffset availSize size =
+                  clampNonNegative $ availSize - size
+
+                (leftMargin, rightMargin, topMargin, bottomMargin) =
+                  case position of
+                    TopPos ->
+                      let offset =
+                            if width >= availableWidth
+                            then 0
+                            else case alignment of
+                                   Beginning -> 0
+                                   Center -> centerOffset availableWidth width
+                                   End -> endOffset availableWidth width
+                          l = xpadding + offset
+                          r = xpadding
+                      in (l, r, ypadding, ypadding)
+                    BottomPos ->
+                      let offset =
+                            if width >= availableWidth
+                            then 0
+                            else case alignment of
+                                   Beginning -> 0
+                                   Center -> centerOffset availableWidth width
+                                   End -> endOffset availableWidth width
+                          l = xpadding + offset
+                          r = xpadding
+                      in (l, r, ypadding, ypadding)
+                    LeftPos ->
+                      let offset =
+                            if height >= availableHeight
+                            then 0
+                            else case alignment of
+                                   Beginning -> 0
+                                   Center -> centerOffset availableHeight height
+                                   End -> endOffset availableHeight height
+                          t = ypadding + offset
+                          b = ypadding
+                      in (xpadding, xpadding, t, b)
+                    RightPos ->
+                      let offset =
+                            if height >= availableHeight
+                            then 0
+                            else case alignment of
+                                   Beginning -> 0
+                                   Center -> centerOffset availableHeight height
+                                   End -> endOffset availableHeight height
+                          t = ypadding + offset
+                          b = ypadding
+                      in (xpadding, xpadding, t, b)
+
+                exclusive =
+                  if reserveSpace
+                  then case position of
+                         TopPos -> height + topMargin
+                         BottomPos -> height + bottomMargin
+                         LeftPos -> width + leftMargin
+                         RightPos -> width + rightMargin
+                  else 0
+
+            Gtk.windowSetDefaultSize window (fromIntegral width) (fromIntegral height)
+            let (reqWidth, reqHeight) =
+                  case position of
+                    TopPos -> (min width availableWidth, height)
+                    BottomPos -> (min width availableWidth, height)
+                    LeftPos -> (width, min height availableHeight)
+                    RightPos -> (width, min height availableHeight)
+            Gtk.widgetSetSizeRequest window
+              (fromIntegral reqWidth)
+              (fromIntegral reqHeight)
+
+            GtkLayerShell.setMargin window GtkLayerShell.EdgeLeft leftMargin
+            GtkLayerShell.setMargin window GtkLayerShell.EdgeRight rightMargin
+            GtkLayerShell.setMargin window GtkLayerShell.EdgeTop topMargin
+            GtkLayerShell.setMargin window GtkLayerShell.EdgeBottom bottomMargin
+
+            case position of
+              TopPos -> do
+                setAnchor GtkLayerShell.EdgeTop True
+                setAnchor GtkLayerShell.EdgeBottom False
+                if width >= availableWidth
+                then do
+                  setAnchor GtkLayerShell.EdgeLeft True
+                  setAnchor GtkLayerShell.EdgeRight True
+                else case alignment of
+                       Beginning -> do
+                         setAnchor GtkLayerShell.EdgeLeft True
+                         setAnchor GtkLayerShell.EdgeRight False
+                       Center -> do
+                         setAnchor GtkLayerShell.EdgeLeft True
+                         setAnchor GtkLayerShell.EdgeRight False
+                       End -> do
+                         setAnchor GtkLayerShell.EdgeLeft False
+                         setAnchor GtkLayerShell.EdgeRight True
+              BottomPos -> do
+                setAnchor GtkLayerShell.EdgeTop False
+                setAnchor GtkLayerShell.EdgeBottom True
+                if width >= availableWidth
+                then do
+                  setAnchor GtkLayerShell.EdgeLeft True
+                  setAnchor GtkLayerShell.EdgeRight True
+                else case alignment of
+                       Beginning -> do
+                         setAnchor GtkLayerShell.EdgeLeft True
+                         setAnchor GtkLayerShell.EdgeRight False
+                       Center -> do
+                         setAnchor GtkLayerShell.EdgeLeft True
+                         setAnchor GtkLayerShell.EdgeRight False
+                       End -> do
+                         setAnchor GtkLayerShell.EdgeLeft False
+                         setAnchor GtkLayerShell.EdgeRight True
+              LeftPos -> do
+                setAnchor GtkLayerShell.EdgeLeft True
+                setAnchor GtkLayerShell.EdgeRight False
+                if height >= availableHeight
+                then do
+                  setAnchor GtkLayerShell.EdgeTop True
+                  setAnchor GtkLayerShell.EdgeBottom True
+                else case alignment of
+                       Beginning -> do
+                         setAnchor GtkLayerShell.EdgeTop True
+                         setAnchor GtkLayerShell.EdgeBottom False
+                       Center -> do
+                         setAnchor GtkLayerShell.EdgeTop True
+                         setAnchor GtkLayerShell.EdgeBottom False
+                       End -> do
+                         setAnchor GtkLayerShell.EdgeTop False
+                         setAnchor GtkLayerShell.EdgeBottom True
+              RightPos -> do
+                setAnchor GtkLayerShell.EdgeLeft False
+                setAnchor GtkLayerShell.EdgeRight True
+                if height >= availableHeight
+                then do
+                  setAnchor GtkLayerShell.EdgeTop True
+                  setAnchor GtkLayerShell.EdgeBottom True
+                else case alignment of
+                       Beginning -> do
+                         setAnchor GtkLayerShell.EdgeTop True
+                         setAnchor GtkLayerShell.EdgeBottom False
+                       Center -> do
+                         setAnchor GtkLayerShell.EdgeTop True
+                         setAnchor GtkLayerShell.EdgeBottom False
+                       End -> do
+                         setAnchor GtkLayerShell.EdgeTop False
+                         setAnchor GtkLayerShell.EdgeBottom True
+
+            GtkLayerShell.setExclusiveZone window exclusive
 
 positionP :: Parser StrutPosition
 positionP = fromMaybe TopPos <$> optional
@@ -124,7 +448,7 @@ noStrutP :: Parser Bool
 noStrutP =
   switch
   (  long "no-strut"
-  <> help "Do not set strut properties for the gtk window"
+  <> help "Do not reserve space for the window (X11: no strut; Wayland: exclusive zone 0)"
   )
 
 barLengthP :: Parser Rational
@@ -158,6 +482,7 @@ buildWindows :: StrutPosition
              -> Int32
              -> [Int32]
              -> Priority
+             -> BackendChoice
              -> Maybe String
              -> Bool
              -> Bool
@@ -165,22 +490,38 @@ buildWindows :: StrutPosition
              -> Rational
              -> Rational
              -> IO ()
-buildWindows pos align size padding monitors priority maybeColorString expand
+buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
              startWatcher noStrut length overlayScale = do
   Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
+  detectedBackend <- detectBackend
+  let backend =
+        case backendChoice of
+          BackendAuto -> detectedBackend
+          BackendX11Choice -> BackendX11
+          BackendWaylandChoice -> BackendWayland
   client <- connectSession
+  logRuntimeInfo backendChoice backend
+  watcherPresent <- hasStatusNotifierWatcher client
+  unless watcherPresent $ do
+    logM "StatusNotifier" WARNING $
+      "No StatusNotifierWatcher found on D-Bus (org.kde.StatusNotifierWatcher). Tray will likely be empty."
+    unless startWatcher $
+      logM "StatusNotifier" WARNING $
+        "Start a watcher first (recommended) or run with --watcher to start one in-process."
   logger <- getRootLogger
   pid <- getProcessID
-  -- Okay to use a forced pattern here because we want to die if this fails anyway
-  Just host <-
+  host <-
     Host.build
       Host.defaultParams
-      { Host.dbusClient = Just client
-      , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
-      , Host.startWatcher = startWatcher
-      }
+        { Host.dbusClient = Just client
+        , Host.uniqueIdentifier = printf "standalone-%s" $ show pid
+        , Host.startWatcher = startWatcher
+        }
+      >>= maybe (logM "StatusNotifier" ERROR "Failed to start StatusNotifier host" >> exitFailure) pure
+  initialItems <- Host.itemInfoMap host
+  logM "StatusNotifier" INFO $ printf "Initial tray items: %d" (Map.size initialItems)
   let c1 =
         defaultStrutConfig
         { strutPosition = pos
@@ -217,8 +558,19 @@ buildWindows pos align size padding monitors priority maybeColorString expand
             , trayRightClickAction = PopupMenu
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
-        when (not noStrut) $
-             setupStrutWindow config window
+        -- Make it behave more like a panel/tray window in the fallback cases.
+        Gtk.windowSetResizable window False
+        Gtk.windowSetSkipTaskbarHint window True
+        Gtk.windowSetSkipPagerHint window True
+        Gtk.windowSetAcceptFocus window False
+        Gtk.windowSetFocusOnMap window False
+        Gtk.windowSetKeepAbove window True
+        Gtk.windowSetTypeHint window Gdk.WindowTypeHintDock
+        case backend of
+          BackendX11 ->
+            when (not noStrut) $ setupStrutWindow config window
+          BackendWayland ->
+            setupLayerShellWindow config window (not noStrut)
         maybe
           (makeWindowTransparent window)
           (getColor >=>
@@ -237,7 +589,7 @@ buildWindows pos align size padding monitors priority maybeColorString expand
 parser :: Parser (IO ())
 parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-  monitorNumberP <*> logP <*> colorP <*> expandP <*> startWatcherP <*>
+  monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*> startWatcherP <*>
   noStrutP <*> barLengthP <*> overlayScaleP
 
 versionOption :: Parser (a -> a)

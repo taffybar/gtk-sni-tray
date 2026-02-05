@@ -55,7 +55,7 @@ library
     , haskell-gi >=0.21.2
     , haskell-gi-base >=0.21.1
     , hslogger
-    , status-notifier-item >=0.3.0.1 && <0.4.0.0
+    , status-notifier-item >=0.3.2.0 && <0.4.0.0
     , text
     , transformers
     , transformers-base >=0.4
@@ -71,9 +71,11 @@ executable gtk-sni-tray-standalone
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
+    , containers
     , dbus
     , dbus-hslogger >=0.1.0.1 && <0.2.0.0
     , gi-gdk3
+    , gi-gtk-layer-shell
     , gi-gtk3
     , gtk-sni-tray
     , gtk-strut
