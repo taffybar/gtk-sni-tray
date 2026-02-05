@@ -15,7 +15,6 @@ import           Data.Bool (bool)
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
-import           Data.GI.Base (unsafeCastTo)
 import qualified Data.GI.Base.ManagedPtr as ManagedPtr
 import           Data.GI.Base.GError
 import           Data.Int
@@ -25,7 +24,6 @@ import           Data.Maybe
 import           Data.Ord
 import           Data.Ratio
 import qualified Data.Text as T
-import qualified GI.DbusmenuGtk3.Objects.Menu as DM
 import qualified GI.GLib as GLib
 import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
@@ -38,6 +36,7 @@ import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
 import           GI.Gtk.Objects.IconTheme
 import           Graphics.UI.GIGtkStrut
+import qualified StatusNotifier.DBusMenu as DBusMenu
 import           StatusNotifier.Host.Service
 import qualified StatusNotifier.Item.Client as IC
 import           System.Directory
@@ -186,7 +185,7 @@ getIconPixbufFromByteString width height byteString = do
 
 data ItemContext = ItemContext
   { contextName :: DBusTypes.BusName
-  , contextMenu :: Maybe DM.Menu
+  , contextMenuPath :: Maybe DBusTypes.ObjectPath
   , contextImage :: Gtk.Image
   , contextButton :: Gtk.EventBox
   }
@@ -236,6 +235,8 @@ buildTray Host
   trayLogger INFO "Building tray"
 
   trayBox <- Gtk.boxNew orientation 0
+  Gtk.widgetGetStyleContext trayBox >>=
+    flip Gtk.styleContextAddClass "tray-box"
   contextMap <- MV.newMVar Map.empty
 
   let getContext name = Map.lookup name <$> MV.readMVar contextMap
@@ -283,11 +284,10 @@ buildTray Host
                     info@ItemInfo { menuPath = pathForMenu
                                   , itemServiceName = serviceName
                                   , itemServicePath = servicePath
-                                  } =
+          } =
         do
-          let serviceNameStr = coerce serviceName
+          let serviceNameStr = (coerce serviceName :: String)
               servicePathStr = coerce servicePath :: String
-              serviceMenuPathStr = coerce <$> pathForMenu
               logText = printf "Adding widget for %s - %s"
                         serviceNameStr servicePathStr
 
@@ -295,6 +295,8 @@ buildTray Host
 
           eventBox <- Gtk.eventBoxNew
           Gtk.widgetAddEvents eventBox [Gdk.EventMaskScrollMask]
+          Gtk.widgetGetStyleContext eventBox >>=
+            flip Gtk.styleContextAddClass "tray-icon-button"
 
           image <-
             case imageSize of
@@ -352,24 +354,21 @@ buildTray Host
           Gtk.containerAdd eventBox image
           setTooltipText eventBox info
 
-          maybeMenu <- sequenceA $ DM.menuNew (T.pack serviceNameStr) .
-                       T.pack <$> serviceMenuPathStr
-
           let context =
                 ItemContext { contextName = serviceName
-                            , contextMenu = maybeMenu
+                            , contextMenuPath = pathForMenu
                             , contextImage = image
                             , contextButton = eventBox
                             }
-              popupItemForMenu menu triggerEvent = do
-                -- Cast DM.Menu to Gtk.Menu for menuPopupAtWidget
-                gtkMenu <- unsafeCastTo Gtk.Menu menu
+
+              popupGtkMenu gtkMenu triggerEvent = do
                 -- On Wayland (e.g. Hyprland) popups need the triggering input
                 -- event so GTK can associate the popup with the correct seat/
                 -- serial. Also, anchor to the EventBox rather than the Image
                 -- (GtkImage is typically "no-window"), or the popup may be
                 -- positioned/realized incorrectly.
                 Gtk.widgetShowAll gtkMenu
+                _ <- Gtk.onWidgetHide gtkMenu (Gtk.widgetDestroy gtkMenu)
                 evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
                 ManagedPtr.withTransient evPtr $ \ev ->
                   Gtk.menuPopupAtWidget gtkMenu eventBox
@@ -388,7 +387,15 @@ buildTray Host
               Activate -> void $ IC.activate client serviceName servicePath x y
               SecondaryActivate -> void $ IC.secondaryActivate client
                                    serviceName servicePath x y
-              PopupMenu -> maybe (return ()) (`popupItemForMenu` event) maybeMenu
+              PopupMenu -> do
+                menuPath' <- getInfoAttr menuPath Nothing serviceName
+                traverse_
+                  (\p -> catchAny
+                    (DBusMenu.buildMenu client serviceName p >>= (`popupGtkMenu` event))
+                    (\e -> trayLogger WARNING $ printf "Failed to build menu for %s: %s"
+                      (coerce serviceName :: String)
+                      (show e)))
+                  menuPath'
             return False
           _ <- Gtk.onWidgetScrollEvent eventBox $ \event -> do
             direction <- getEventScrollDirection event

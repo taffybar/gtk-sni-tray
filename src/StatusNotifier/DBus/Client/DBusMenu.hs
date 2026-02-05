@@ -1,0 +1,15 @@
+{-# LANGUAGE TemplateHaskell #-}
+module StatusNotifier.DBus.Client.DBusMenu where
+
+import DBus.Generation
+import System.FilePath
+import StatusNotifier.DBus.Client.Util
+
+-- Generates DBus client functions/signals for the com.canonical.dbusmenu
+-- interface from introspection XML, similar to Taffybar's approach.
+generateClientFromFile
+  defaultRecordGenerationParams
+  defaultGenerationParams { genTakeSignalErrorHandler = True }
+  False
+  ("dbus-xml" </> "com.canonical.dbusmenu.xml")
+

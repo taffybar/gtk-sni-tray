@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.9.1
+version:             0.1.10.0
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
@@ -9,6 +9,7 @@ copyright:           "2018 Ivan Malison"
 extra-source-files:
 - README.md
 - ChangeLog.md
+- dbus-xml/com.canonical.dbusmenu.xml
 
 synopsis:            A standalone StatusNotifierItem/AppIndicator tray
 category:            System
@@ -16,6 +17,13 @@ category:            System
 description:         Please see the README on Github at <https://github.com/IvanMalison/gtk-sni-tray#readme>
 
 library:
+  exposed-modules:
+    - StatusNotifier.TransparentWindow
+    - StatusNotifier.Tray
+  other-modules:
+    - StatusNotifier.DBusMenu
+    - StatusNotifier.DBus.Client.Util
+    - StatusNotifier.DBus.Client.DBusMenu
   dependencies:
     - base >= 4.7 && < 5
     - bytestring
@@ -27,7 +35,6 @@ library:
     - gi-cairo
     - gi-cairo-render
     - gi-cairo-connector
-    - gi-dbusmenugtk3
     - gi-gdk3
     - gi-gdkpixbuf >= 2.0.16
     - gi-glib
@@ -38,6 +45,7 @@ library:
     - hslogger
     - status-notifier-item >= 0.3.2.0 && < 0.4.0.0
     - text
+    - template-haskell
     - transformers
     - transformers-base >= 0.4
     - unix

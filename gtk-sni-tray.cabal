@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           gtk-sni-tray
-version:        0.1.9.1
+version:        0.1.10.0
 synopsis:       A standalone StatusNotifierItem/AppIndicator tray
 description:    Please see the README on Github at <https://github.com/IvanMalison/gtk-sni-tray#readme>
 category:       System
@@ -20,6 +20,7 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+    dbus-xml/com.canonical.dbusmenu.xml
 
 source-repository head
   type: git
@@ -30,7 +31,9 @@ library
       StatusNotifier.TransparentWindow
       StatusNotifier.Tray
   other-modules:
-      Paths_gtk_sni_tray
+      StatusNotifier.DBusMenu
+      StatusNotifier.DBus.Client.Util
+      StatusNotifier.DBus.Client.DBusMenu
   hs-source-dirs:
       src
   pkgconfig-depends:
@@ -46,7 +49,6 @@ library
     , gi-cairo
     , gi-cairo-connector
     , gi-cairo-render
-    , gi-dbusmenugtk3
     , gi-gdk3
     , gi-gdkpixbuf >=2.0.16
     , gi-glib
@@ -56,6 +58,7 @@ library
     , haskell-gi-base >=0.21.1
     , hslogger
     , status-notifier-item >=0.3.2.0 && <0.4.0.0
+    , template-haskell
     , text
     , transformers
     , transformers-base >=0.4

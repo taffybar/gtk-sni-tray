@@ -7,8 +7,6 @@ nix:
     - gcc
     - gobjectIntrospection
     - gtk3
-    - libdbusmenu-glib
-    - libdbusmenu-gtk3
     - libxml2
     - pkgconfig
     - x11
