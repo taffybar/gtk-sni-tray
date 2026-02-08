@@ -1,5 +1,12 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.12.0
+
+- Add `trayCenterIcons` field to `TrayParams` and `--center-icons` CLI flag to
+  center tray icons within the bar.
+- Anchor LibDBusMenu popup to the icon image widget instead of the EventBox for
+  more accurate popup positioning.
+
 ## 0.1.11.3
 
 - Fix menu popup positioning: use `menuPopupAtPointer` with the actual button
