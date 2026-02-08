@@ -377,20 +377,20 @@ buildTray Host
                             , contextButton = eventBox
                             }
 
-              popupGtkMenu gtkMenu _triggerEvent = do
+              popupGtkMenu gtkMenu mEvent = do
                 Gtk.menuAttachToWidget gtkMenu eventBox Nothing
                 _ <- Gtk.onWidgetHide gtkMenu $
                   void $ GLib.idleAdd GLib.PRIORITY_LOW $ do
                     Gtk.widgetDestroy gtkMenu
                     return False
                 Gtk.widgetShowAll gtkMenu
-                -- Use menuPopupAtWidget: menuPopupAtPointer fails on
-                -- Wayland/layer-shell with "no trigger event" because the
-                -- GdkEvent's window is not a valid GDK surface.
-                Gtk.menuPopupAtWidget gtkMenu eventBox
-                  Gdk.GravitySouth Gdk.GravityNorth Nothing
+                Gtk.menuPopupAtPointer gtkMenu mEvent
 
           _ <- Gtk.onWidgetButtonPressEvent eventBox $ \event -> do
+            -- Capture the current event as a Gdk.Event before any
+            -- blocking calls (DBus etc.) so menuPopupAtPointer can
+            -- use its coordinates for popup positioning.
+            currentEvent <- Gtk.getCurrentEvent
             mouseButton <- Gdk.getEventButtonButton event
             x <- round <$> Gdk.getEventButtonXRoot event
             y <- round <$> Gdk.getEventButtonYRoot event
@@ -449,7 +449,7 @@ buildTray Host
                          return ()
                        HaskellDBusMenu -> do
                          gtkMenu <- DBusMenu.buildMenu client serviceName p
-                         popupGtkMenu gtkMenu event)
+                         popupGtkMenu gtkMenu currentEvent)
                     (logActionError "PopupMenu"))
                   menuPath'
             return False

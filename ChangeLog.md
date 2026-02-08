@@ -1,5 +1,11 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.11.3
+
+- Fix menu popup positioning: use `menuPopupAtPointer` with the actual button
+  press event (via `getCurrentEvent`) so the menu appears at the click location
+  instead of at an incorrect widget-relative position.
+
 ## 0.1.11.2
 
 - Add upper bounds to all dependencies per PVP.
