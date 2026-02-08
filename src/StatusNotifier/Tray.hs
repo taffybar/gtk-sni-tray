@@ -363,17 +363,12 @@ buildTray Host
                             }
 
               popupGtkMenu gtkMenu triggerEvent = do
-                -- On Wayland (e.g. Hyprland) popups need the triggering input
-                -- event so GTK can associate the popup with the correct seat/
-                -- serial. Also, anchor to the EventBox rather than the Image
-                -- (GtkImage is typically "no-window"), or the popup may be
-                -- positioned/realized incorrectly.
                 Gtk.menuAttachToWidget gtkMenu eventBox Nothing
                 _ <- Gtk.onWidgetHide gtkMenu (Gtk.widgetDestroy gtkMenu)
+                Gtk.widgetShowAll gtkMenu
                 evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
                 ManagedPtr.withTransient evPtr $ \ev ->
-                  Gtk.menuPopupAtWidget gtkMenu eventBox
-                    GravitySouthWest GravityNorthWest (Just ev)
+                  Gtk.menuPopupAtPointer gtkMenu (Just ev)
 
           _ <- Gtk.onWidgetButtonPressEvent eventBox $ \event -> do
             mouseButton <- Gdk.getEventButtonButton event
