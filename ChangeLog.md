@@ -1,5 +1,19 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.11.1
+
+- Fix menu popups on Wayland/layer-shell: use `menuPopupAtWidget` instead of
+  `menuPopupAtPointer` which fails with "no trigger event" when the GdkEvent's
+  window is not a valid GDK surface.
+- Fix menu item clicks: defer menu widget destruction via `idleAdd` with
+  `PRIORITY_LOW` so GTK's `activate` signal fires before the widget is destroyed.
+- Fix DBus Event variant wrapping: correctly double-wrap the data parameter
+  to produce wire type `v` instead of `i`.
+- Send Event DBus calls on a forked thread to avoid blocking the GTK main loop.
+- Default menu backend to `HaskellDBusMenu` (pure Haskell implementation).
+- Deferred popup for `LibDBusMenu` backend to avoid assertion failures from
+  showing the menu before the C library finishes loading the layout.
+
 ## 0.1.11.0
 
 - Restore `libdbusmenu` (`gi-dbusmenugtk3`) as the default menu backend.

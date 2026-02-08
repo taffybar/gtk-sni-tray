@@ -471,8 +471,8 @@ menuBackendP :: Parser MenuBackend
 menuBackendP =
   option (eitherReader parseMenuBackend)
   (  long "menu-backend"
-  <> help "Menu backend: libdbusmenu (default) | haskell"
-  <> value LibDBusMenu
+  <> help "Menu backend: haskell (default) | libdbusmenu"
+  <> value HaskellDBusMenu
   <> metavar "BACKEND"
   )
   where

@@ -4,6 +4,7 @@
 module StatusNotifier.Tray where
 
 import           Control.Concurrent.MVar as MV
+import           Data.IORef (newIORef, readIORef, writeIORef)
 import           Control.Exception.Base
 import           Control.Exception.Enclosed (catchAny)
 import           Control.Monad
@@ -227,7 +228,7 @@ defaultTrayParams = TrayParams
   , trayLeftClickAction = Activate
   , trayMiddleClickAction = SecondaryActivate
   , trayRightClickAction = PopupMenu
-  , trayMenuBackend = LibDBusMenu
+  , trayMenuBackend = HaskellDBusMenu
   }
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
@@ -376,16 +377,18 @@ buildTray Host
                             , contextButton = eventBox
                             }
 
-              popupGtkMenu gtkMenu triggerEvent = do
+              popupGtkMenu gtkMenu _triggerEvent = do
                 Gtk.menuAttachToWidget gtkMenu eventBox Nothing
                 _ <- Gtk.onWidgetHide gtkMenu $
-                  void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
+                  void $ GLib.idleAdd GLib.PRIORITY_LOW $ do
                     Gtk.widgetDestroy gtkMenu
                     return False
                 Gtk.widgetShowAll gtkMenu
-                evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
-                ManagedPtr.withTransient evPtr $ \ev ->
-                  Gtk.menuPopupAtPointer gtkMenu (Just ev)
+                -- Use menuPopupAtWidget: menuPopupAtPointer fails on
+                -- Wayland/layer-shell with "no trigger event" because the
+                -- GdkEvent's window is not a valid GDK surface.
+                Gtk.menuPopupAtWidget gtkMenu eventBox
+                  Gdk.GravitySouth Gdk.GravityNorth Nothing
 
           _ <- Gtk.onWidgetButtonPressEvent eventBox $ \event -> do
             mouseButton <- Gdk.getEventButtonButton event
@@ -413,14 +416,40 @@ buildTray Host
                 menuPath' <- getInfoAttr menuPath Nothing serviceName
                 traverse_
                   (\p -> catchAny
-                    (do gtkMenu <- case menuBackend of
-                          LibDBusMenu -> do
-                            let sn = T.pack (coerce serviceName :: String)
-                                mp = T.pack (coerce p :: String)
-                            DM.menuNew sn mp >>= unsafeCastTo Gtk.Menu
-                          HaskellDBusMenu ->
-                            DBusMenu.buildMenu client serviceName p
-                        popupGtkMenu gtkMenu event)
+                    (case menuBackend of
+                       LibDBusMenu -> do
+                         let sn = T.pack (coerce serviceName :: String)
+                             mp = T.pack (coerce p :: String)
+                         gtkMenu <- DM.menuNew sn mp >>= unsafeCastTo Gtk.Menu
+                         Gtk.menuAttachToWidget gtkMenu eventBox Nothing
+                         _ <- Gtk.onWidgetHide gtkMenu $
+                           void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
+                             Gtk.widgetDestroy gtkMenu
+                             return False
+                         -- libdbusmenu-gtk fetches the menu layout
+                         -- asynchronously; showing before the root menuitem
+                         -- is available triggers assertion failures. Defer
+                         -- the popup until the menu is populated.
+                         attemptsRef <- newIORef (0 :: Int)
+                         _ <- GLib.timeoutAdd GLib.PRIORITY_DEFAULT 50 $ do
+                           n <- readIORef attemptsRef
+                           if n >= 100
+                             then do
+                               Gtk.widgetDestroy gtkMenu
+                               return False
+                             else do
+                               writeIORef attemptsRef (n + 1)
+                               children <- Gtk.containerGetChildren gtkMenu
+                               if null children
+                                 then return True
+                                 else do
+                                   Gtk.widgetShowAll gtkMenu
+                                   Gtk.menuPopupAtPointer gtkMenu Nothing
+                                   return False
+                         return ()
+                       HaskellDBusMenu -> do
+                         gtkMenu <- DBusMenu.buildMenu client serviceName p
+                         popupGtkMenu gtkMenu event)
                     (logActionError "PopupMenu"))
                   menuPath'
             return False

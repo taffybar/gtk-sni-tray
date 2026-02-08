@@ -3,8 +3,9 @@ module StatusNotifier.DBusMenu
   ( buildMenu
   ) where
 
+import Control.Concurrent (forkIO)
 import Control.Exception.Enclosed (catchAny)
-import Control.Monad (forM_, when)
+import Control.Monad (forM_, void, when)
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -17,6 +18,8 @@ import Data.GI.Base (unsafeCastTo)
 import qualified GI.Gtk as Gtk
 import System.Log.Logger (Priority(..), logM)
 import Text.Printf
+
+import qualified StatusNotifier.DBus.Client.DBusMenu as DM
 
 dbusMenuLogger :: Priority -> String -> IO ()
 dbusMenuLogger = logM "StatusNotifier.DBusMenu"
@@ -39,44 +42,54 @@ variantToLayout v = do
   children <- traverse variantToLayout kids
   pure LayoutNode { lnId = i, lnProps = props, lnChildren = children }
 
-callMenu
-  :: Client
-  -> BusName
-  -> ObjectPath
-  -> MemberName
-  -> [Variant]
-  -> IO [Variant]
-callMenu client dest path member body = do
-  let call0 =
-        (methodCall path "com.canonical.dbusmenu" member)
-          { methodCallDestination = Just dest
-          , methodCallBody = body
-          }
-  reply <- call client call0
-  case reply of
-    Left err -> fail $ "DBusMenu call failed: " <> show err
-    Right ret -> pure (methodReturnBody ret)
+tupleToLayout :: LayoutTuple -> LayoutNode
+tupleToLayout (i, props, kids) =
+  LayoutNode
+    { lnId = i
+    , lnProps = props
+    , lnChildren = [ n | v <- kids, Just n <- [variantToLayout v] ]
+    }
+
+-- | Unwrap an Either MethodError, failing on Left.
+unwrapCall :: String -> Either MethodError a -> IO a
+unwrapCall label (Left err) = fail $ label <> " failed: " <> show err
+unwrapCall _ (Right a) = pure a
 
 aboutToShow :: Client -> BusName -> ObjectPath -> Int32 -> IO Bool
-aboutToShow client dest path i = do
-  body <- callMenu client dest path "AboutToShow" [toVariant i]
-  case body of
-    (v : _) -> pure $ fromMaybe False (fromVariant v)
-    _ -> pure False
+aboutToShow client dest path i =
+  either (const False) id <$> DM.aboutToShow client dest path i
 
 getLayout :: Client -> BusName -> ObjectPath -> Int32 -> Int32 -> [String] -> IO (Word32, LayoutNode)
 getLayout client dest path parentId depth propNames = do
-  body <- callMenu client dest path "GetLayout"
-    [ toVariant parentId
-    , toVariant depth
-    , toVariant propNames
-    ]
-  case body of
-    (revV : layoutV : _) -> do
-      rev <- maybe (fail "GetLayout: bad revision") pure (fromVariant revV)
-      node <- maybe (fail "GetLayout: bad layout") pure (variantToLayout layoutV)
-      pure (rev, node)
-    _ -> fail "GetLayout: unexpected reply body"
+  (rev, tup) <- unwrapCall "GetLayout" =<<
+    DM.getLayout client dest path parentId depth propNames
+  pure (rev, tupleToLayout tup)
+
+sendClicked :: Client -> BusName -> ObjectPath -> Int32 -> Word32 -> IO ()
+sendClicked client dest path itemId ts = do
+  dbusMenuLogger DEBUG $
+    printf "sendClicked: id=%d dest=%s path=%s ts=%d"
+           itemId (show dest) (show path) ts
+  let mc = DM.eventMethodCall
+        { methodCallDestination = Just dest
+        , methodCallPath = path
+        , methodCallBody =
+            [ toVariant itemId
+            , toVariant ("clicked" :: String)
+            , toVariant (toVariant (0 :: Int32))
+            , toVariant ts
+            ]
+        }
+  -- Send on a forked thread to avoid blocking GTK; use `call` instead of
+  -- `callNoReply` so we can detect service errors.
+  void $ forkIO $ catchAny
+    (do result <- call client mc
+        case result of
+          Left err -> dbusMenuLogger WARNING $
+            printf "sendClicked: Event error: %s" (show err)
+          Right _ -> dbusMenuLogger DEBUG "sendClicked: Event succeeded")
+    (\e -> dbusMenuLogger WARNING $
+           printf "sendClicked: Event exception: %s" (show e))
 
 getPropS :: String -> LayoutNode -> Maybe String
 getPropS key LayoutNode { lnProps = props } =
@@ -110,17 +123,6 @@ menuItemToggleType = getPropS "toggle-type"
 
 menuItemToggleState :: LayoutNode -> Maybe Int32
 menuItemToggleState = getPropI32 "toggle-state"
-
-sendClicked :: Client -> BusName -> ObjectPath -> Int32 -> Word32 -> IO ()
-sendClicked client dest path itemId ts = do
-  -- "clicked" is the common event for activating menu items in the DBusMenu spec.
-  _ <- callMenu client dest path "Event"
-    [ toVariant itemId
-    , toVariant ("clicked" :: String)
-    , toVariant ("" :: String) -- v (data)
-    , toVariant ts
-    ]
-  pure ()
 
 populateGtkMenu :: Client -> BusName -> ObjectPath -> Gtk.Menu -> LayoutNode -> IO ()
 populateGtkMenu client dest path gtkMenu root = do
@@ -207,9 +209,12 @@ buildGtkMenuItem client dest path node = do
 
 buildMenu :: Client -> BusName -> ObjectPath -> IO Gtk.Menu
 buildMenu client dest path = do
-  dbusMenuLogger DEBUG "Building DBusMenu Gtk.Menu"
+  dbusMenuLogger DEBUG $
+    printf "buildMenu: dest=%s path=%s" (show dest) (show path)
   _ <- aboutToShow client dest path 0
   (_, layout) <- getLayout client dest path 0 (-1) []
+  dbusMenuLogger DEBUG $
+    printf "buildMenu: root has %d children" (length (lnChildren layout))
   menu <- Gtk.menuNew
   Gtk.widgetSetName menu "tray-menu-root"
   menuW <- Gtk.toWidget menu
