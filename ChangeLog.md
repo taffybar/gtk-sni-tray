@@ -1,5 +1,11 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.10.1
+
+- Fix menu popup positioning on Wayland: use `menuAttachToWidget` instead of
+  premature `widgetShowAll` so that `menuPopupAtWidget` can properly anchor the
+  popup surface to the tray icon.
+
 ## 0.1.10.0
 
 - Replace `libdbusmenu` usage (`gi-dbusmenugtk3`) with a pure Haskell

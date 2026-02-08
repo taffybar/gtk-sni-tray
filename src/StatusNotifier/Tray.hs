@@ -367,7 +367,7 @@ buildTray Host
                 -- serial. Also, anchor to the EventBox rather than the Image
                 -- (GtkImage is typically "no-window"), or the popup may be
                 -- positioned/realized incorrectly.
-                Gtk.widgetShowAll gtkMenu
+                Gtk.menuAttachToWidget gtkMenu eventBox Nothing
                 _ <- Gtk.onWidgetHide gtkMenu (Gtk.widgetDestroy gtkMenu)
                 evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
                 ManagedPtr.withTransient evPtr $ \ev ->
