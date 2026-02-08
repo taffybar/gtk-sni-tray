@@ -1,5 +1,12 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.10.2
+
+- Fix menu popups not appearing: restore `widgetShowAll` so menu items are
+  visible, and use `menuPopupAtPointer` for reliable positioning on both X11
+  and Wayland.
+- Fix all `-Wall` warnings across library and executable.
+
 ## 0.1.10.1
 
 - Fix menu popup positioning on Wayland: use `menuAttachToWidget` instead of
