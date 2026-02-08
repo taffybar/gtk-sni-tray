@@ -1,5 +1,10 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.11.2
+
+- Add upper bounds to all dependencies per PVP.
+- Remove trailing zeros from dependency upper bounds.
+
 ## 0.1.11.1
 
 - Fix menu popups on Wayland/layer-shell: use `menuPopupAtWidget` instead of

@@ -1,5 +1,5 @@
 name:                gtk-sni-tray
-version:             0.1.11.1
+version:             0.1.11.2
 github:              "IvanMalison/gtk-sni-tray"
 license:             BSD3
 author:              "Ivan Malison"
@@ -26,30 +26,30 @@ library:
     - StatusNotifier.DBus.Client.DBusMenu
   dependencies:
     - base >= 4.7 && < 5
-    - bytestring
-    - containers
-    - dbus >= 1.0.0 && < 2.0.0
-    - directory
-    - enclosed-exceptions >= 1.0.0.1
-    - filepath
-    - gi-cairo
-    - gi-cairo-render
-    - gi-cairo-connector
-    - gi-dbusmenugtk3
-    - gi-gdk3
-    - gi-gdkpixbuf >= 2.0.16
-    - gi-glib
-    - gi-gtk3
-    - gtk-strut >= 0.1.4.0
-    - haskell-gi >= 0.21.2
-    - haskell-gi-base >= 0.21.1
-    - hslogger
-    - status-notifier-item >= 0.3.2.0 && < 0.4.0.0
-    - text
-    - template-haskell
-    - transformers
-    - transformers-base >= 0.4
-    - unix
+    - bytestring >= 0.10 && < 0.13
+    - containers >= 0.5 && < 0.8
+    - dbus >= 1 && < 2
+    - directory >= 1.2 && < 1.4
+    - enclosed-exceptions >= 1.0.0.1 && < 1.1
+    - filepath >= 1.3 && < 1.6
+    - gi-cairo >= 1.0 && < 1.1
+    - gi-cairo-render >= 0.1 && < 0.2
+    - gi-cairo-connector >= 0.1 && < 0.2
+    - gi-dbusmenugtk3 >= 0.4 && < 0.5
+    - gi-gdk3 >= 3.0 && < 3.1
+    - gi-gdkpixbuf >= 2.0.16 && < 2.1
+    - gi-glib >= 2.0 && < 2.1
+    - gi-gtk3 >= 3.0 && < 3.1
+    - gtk-strut >= 0.1.4 && < 0.2
+    - haskell-gi >= 0.21.2 && < 0.27
+    - haskell-gi-base >= 0.21.1 && < 0.27
+    - hslogger >= 1.2 && < 1.4
+    - status-notifier-item >= 0.3.2 && < 0.4
+    - text >= 1.2 && < 2.2
+    - template-haskell >= 2.10 && < 2.23
+    - transformers >= 0.4 && < 0.7
+    - transformers-base >= 0.4 && < 0.5
+    - unix >= 2.7 && < 2.9
   source-dirs: src
   pkg-config-dependencies:
     - gtk+-3.0
@@ -65,15 +65,15 @@ executables:
     dependencies:
       - base
       - dbus
-      - dbus-hslogger >= 0.1.0.1 && < 0.2.0.0
+      - dbus-hslogger >= 0.1.0.1 && < 0.2
       - containers
       - gi-gdk3
       - gi-gtk3
-      - gi-gtk-layer-shell
+      - gi-gtk-layer-shell >= 0.1 && < 0.2
       - gtk-sni-tray
       - gtk-strut
       - hslogger
-      - optparse-applicative
+      - optparse-applicative >= 0.14 && < 0.19
       - status-notifier-item
       - text
       - unix
