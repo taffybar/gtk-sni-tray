@@ -216,6 +216,7 @@ data TrayParams = TrayParams
   , trayMiddleClickAction :: TrayClickAction
   , trayRightClickAction :: TrayClickAction
   , trayMenuBackend :: MenuBackend
+  , trayCenterIcons :: Bool
   }
 
 defaultTrayParams :: TrayParams
@@ -229,6 +230,7 @@ defaultTrayParams = TrayParams
   , trayMiddleClickAction = SecondaryActivate
   , trayRightClickAction = PopupMenu
   , trayMenuBackend = HaskellDBusMenu
+  , trayCenterIcons = False
   }
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
@@ -247,10 +249,14 @@ buildTray Host
                      , trayMiddleClickAction = middleClickAction
                      , trayRightClickAction = rightClickAction
                      , trayMenuBackend = menuBackend
+                     , trayCenterIcons = centerIcons
                      } = do
   trayLogger INFO "Building tray"
 
   trayBox <- Gtk.boxNew orientation 0
+  when centerIcons $ case orientation of
+    Gtk.OrientationHorizontal -> Gtk.widgetSetHalign trayBox Gtk.AlignCenter
+    _ -> Gtk.widgetSetValign trayBox Gtk.AlignCenter
   Gtk.widgetGetStyleContext trayBox >>=
     flip Gtk.styleContextAddClass "tray-box"
   contextMap <- MV.newMVar Map.empty
@@ -444,7 +450,16 @@ buildTray Host
                                  then return True
                                  else do
                                    Gtk.widgetShowAll gtkMenu
-                                   Gtk.menuPopupAtPointer gtkMenu Nothing
+                                   -- libdbusmenu is populated asynchronously, so we popup later via a
+                                   -- timeout. On Wayland, popups generally need the original trigger
+                                   -- event; use menuPopupAtWidget anchored to the EventBox to avoid
+                                   -- "no trigger event" and invalid rect_window assertions.
+                                   Gtk.menuPopupAtWidget
+                                     gtkMenu
+                                     eventBox
+                                     GravitySouthWest
+                                     GravityNorthWest
+                                     currentEvent
                                    return False
                          return ()
                        HaskellDBusMenu -> do

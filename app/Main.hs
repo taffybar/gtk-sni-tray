@@ -435,6 +435,13 @@ expandP =
   <> short 'e'
   )
 
+centerIconsP :: Parser Bool
+centerIconsP =
+  switch
+  (  long "center-icons"
+  <> help "Center the tray icons within the bar"
+  )
+
 startWatcherP :: Parser Bool
 startWatcherP =
   switch
@@ -502,12 +509,13 @@ buildWindows :: StrutPosition
              -> Bool
              -> Bool
              -> Bool
+             -> Bool
              -> Rational
              -> Rational
              -> MenuBackend
              -> IO ()
 buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
-             startWatcher noStrut barLength overlayScale menuBackend = do
+             centerIcons startWatcher noStrut barLength overlayScale menuBackend = do
   _ <- Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -573,6 +581,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
             , trayMiddleClickAction = SecondaryActivate
             , trayRightClickAction = PopupMenu
             , trayMenuBackend = menuBackend
+            , trayCenterIcons = centerIcons
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         Gtk.windowSetResizable window False
@@ -605,7 +614,8 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
 parser :: Parser (IO ())
 parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
-  monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*> startWatcherP <*>
+  monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*>
+  centerIconsP <*> startWatcherP <*>
   noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP
 
 versionOption :: Parser (a -> a)
