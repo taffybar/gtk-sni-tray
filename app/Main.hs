@@ -131,7 +131,6 @@ setupLayerShellWindow StrutConfig
         GtkLayerShell.setNamespace window (T.pack "gtk-sni-tray")
         GtkLayerShell.setLayer window GtkLayerShell.LayerTop
 
-        -- Default behavior if monitor info isn't available: behave like a full-width/height panel.
         GtkLayerShell.setMargin window GtkLayerShell.EdgeLeft xpadding
         GtkLayerShell.setMargin window GtkLayerShell.EdgeRight xpadding
         GtkLayerShell.setMargin window GtkLayerShell.EdgeTop ypadding
@@ -468,6 +467,21 @@ overlayScaleP =
   <> value (5 % 7)
   )
 
+menuBackendP :: Parser MenuBackend
+menuBackendP =
+  option (eitherReader parseMenuBackend)
+  (  long "menu-backend"
+  <> help "Menu backend: libdbusmenu (default) | haskell"
+  <> value LibDBusMenu
+  <> metavar "BACKEND"
+  )
+  where
+    parseMenuBackend s =
+      case map toLower s of
+        "libdbusmenu" -> Right LibDBusMenu
+        "haskell" -> Right HaskellDBusMenu
+        _ -> Left "expected one of: libdbusmenu, haskell"
+
 getColor :: String -> IO Gdk.RGBA
 getColor colorString = do
   rgba <- Gdk.newZeroRGBA
@@ -490,9 +504,10 @@ buildWindows :: StrutPosition
              -> Bool
              -> Rational
              -> Rational
+             -> MenuBackend
              -> IO ()
 buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
-             startWatcher noStrut barLength overlayScale = do
+             startWatcher noStrut barLength overlayScale menuBackend = do
   _ <- Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -557,9 +572,9 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
             , trayLeftClickAction = Activate
             , trayMiddleClickAction = SecondaryActivate
             , trayRightClickAction = PopupMenu
+            , trayMenuBackend = menuBackend
             }
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
-        -- Make it behave more like a panel/tray window in the fallback cases.
         Gtk.windowSetResizable window False
         Gtk.windowSetSkipTaskbarHint window True
         Gtk.windowSetSkipPagerHint window True
@@ -591,7 +606,7 @@ parser :: Parser (IO ())
 parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
   monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*> startWatcherP <*>
-  noStrutP <*> barLengthP <*> overlayScaleP
+  noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption

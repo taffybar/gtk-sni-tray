@@ -15,6 +15,7 @@ import           Data.Bool (bool)
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
+import           Data.GI.Base (unsafeCastTo)
 import qualified Data.GI.Base.ManagedPtr as ManagedPtr
 import           Data.GI.Base.GError
 import           Data.Int
@@ -24,6 +25,7 @@ import           Data.Maybe
 import           Data.Ord
 import           Data.Ratio
 import qualified Data.Text as T
+import qualified GI.DbusmenuGtk3.Objects.Menu as DM
 import qualified GI.GLib as GLib
 import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
@@ -201,6 +203,8 @@ data TrayImageSize = Expand | TrayImageSize Int32
 
 data TrayClickAction = Activate | SecondaryActivate | PopupMenu
 
+data MenuBackend = LibDBusMenu | HaskellDBusMenu deriving (Eq, Show)
+
 data TrayParams = TrayParams
   { trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
@@ -210,6 +214,7 @@ data TrayParams = TrayParams
   , trayLeftClickAction :: TrayClickAction
   , trayMiddleClickAction :: TrayClickAction
   , trayRightClickAction :: TrayClickAction
+  , trayMenuBackend :: MenuBackend
   }
 
 defaultTrayParams :: TrayParams
@@ -222,6 +227,7 @@ defaultTrayParams = TrayParams
   , trayLeftClickAction = Activate
   , trayMiddleClickAction = SecondaryActivate
   , trayRightClickAction = PopupMenu
+  , trayMenuBackend = LibDBusMenu
   }
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
@@ -239,6 +245,7 @@ buildTray Host
                      , trayLeftClickAction = leftClickAction
                      , trayMiddleClickAction = middleClickAction
                      , trayRightClickAction = rightClickAction
+                     , trayMenuBackend = menuBackend
                      } = do
   trayLogger INFO "Building tray"
 
@@ -371,7 +378,10 @@ buildTray Host
 
               popupGtkMenu gtkMenu triggerEvent = do
                 Gtk.menuAttachToWidget gtkMenu eventBox Nothing
-                _ <- Gtk.onWidgetHide gtkMenu (Gtk.widgetDestroy gtkMenu)
+                _ <- Gtk.onWidgetHide gtkMenu $
+                  void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
+                    Gtk.widgetDestroy gtkMenu
+                    return False
                 Gtk.widgetShowAll gtkMenu
                 evPtr <- ManagedPtr.unsafeManagedPtrCastPtr triggerEvent :: IO (Ptr Gdk.Event)
                 ManagedPtr.withTransient evPtr $ \ev ->
@@ -403,7 +413,14 @@ buildTray Host
                 menuPath' <- getInfoAttr menuPath Nothing serviceName
                 traverse_
                   (\p -> catchAny
-                    (DBusMenu.buildMenu client serviceName p >>= (`popupGtkMenu` event))
+                    (do gtkMenu <- case menuBackend of
+                          LibDBusMenu -> do
+                            let sn = T.pack (coerce serviceName :: String)
+                                mp = T.pack (coerce p :: String)
+                            DM.menuNew sn mp >>= unsafeCastTo Gtk.Menu
+                          HaskellDBusMenu ->
+                            DBusMenu.buildMenu client serviceName p
+                        popupGtkMenu gtkMenu event)
                     (logActionError "PopupMenu"))
                   menuPath'
             return False
@@ -415,8 +432,6 @@ buildTray Host
                                ScrollDirectionLeft -> Just "horizontal"
                                ScrollDirectionRight -> Just "horizontal"
                                _ -> Nothing
-                -- deltaX/deltaY are provided only in case of smooth scrolling which
-                -- is enabled via additional flag, we don't to enable/handle it
                 delta = case direction of
                           ScrollDirectionUp -> -1
                           ScrollDirectionDown -> 1
@@ -469,12 +484,12 @@ buildTray Host
             _mainHeight <- getPixbufHeight pixbuf
             _mainWidth <- getPixbufWidth pixbuf
             pixbufComposite overlayPixbuf pixbuf
-              0 0                           -- Top left corner
-              actualOWidth actualOHeight    -- Overlay size
-              0 0                           -- Offset
-              1.0 1.0                       -- Scale
-              InterpTypeBilinear            -- InterpType
-              255                           -- Source image alpha
+              0 0
+              actualOWidth actualOHeight
+              0 0
+              1.0 1.0
+              InterpTypeBilinear
+              255
         return pixbuf
 
       getScaledPixBufFromInfo size info =

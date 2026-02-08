@@ -1,5 +1,12 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.11.0
+
+- Restore `libdbusmenu` (`gi-dbusmenugtk3`) as the default menu backend.
+- Add runtime-configurable menu backend selection: `LibDBusMenu` (default) or
+  `HaskellDBusMenu` via `trayMenuBackend` in `TrayParams` and `--menu-backend`
+  CLI flag.
+
 ## 0.1.10.2
 
 - Fix menu popups not appearing: restore `widgetShowAll` so menu items are
