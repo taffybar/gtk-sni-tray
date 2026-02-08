@@ -454,11 +454,13 @@ buildTray Host
                                    -- timeout. On Wayland, popups generally need the original trigger
                                    -- event; use menuPopupAtWidget anchored to the EventBox to avoid
                                    -- "no trigger event" and invalid rect_window assertions.
+                                   -- Anchor to the actual icon widget so the popup aligns with the
+                                   -- visible image, not the full EventBox allocation.
                                    Gtk.menuPopupAtWidget
                                      gtkMenu
-                                     eventBox
-                                     GravitySouthWest
-                                     GravityNorthWest
+                                     image
+                                     GravitySouth
+                                     GravityNorth
                                      currentEvent
                                    return False
                          return ()
