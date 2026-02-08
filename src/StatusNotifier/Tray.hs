@@ -72,21 +72,24 @@ scalePixbufToSize size orientation pixbuf = do
   height <- pixbufGetHeight pixbuf
   let warnAndReturnOrig =
         trayLogger WARNING "Unable to scale pixbuf" >> return pixbuf
-      targetWidth = case orientation of
-                      Gtk.OrientationHorizontal -> False
-                      _ -> True
-      (scaledWidth, scaledHeight) =
-        getScaledWidthHeight targetWidth size width height
-  trayLogger DEBUG $
-             printf
-             "Scaling pb to %s, actualW: %s, actualH: %s, scaledW: %s, scaledH: %s"
-             (show size) (show width) (show height)
-             (show scaledWidth) (show scaledHeight)
-
-  trayLogger DEBUG $ printf "targetW: %s, targetH: %s"
+  if width <= 0 || height <= 0
+  then warnAndReturnOrig
+  else do
+    let targetWidth = case orientation of
+                        Gtk.OrientationHorizontal -> False
+                        _ -> True
+        (scaledWidth, scaledHeight) =
+          getScaledWidthHeight targetWidth size width height
+    trayLogger DEBUG $
+               printf
+               "Scaling pb to %s, actualW: %s, actualH: %s, scaledW: %s, scaledH: %s"
+               (show size) (show width) (show height)
                (show scaledWidth) (show scaledHeight)
-  maybe warnAndReturnOrig return =<<
-    pixbufScaleSimple pixbuf scaledWidth scaledHeight InterpTypeBilinear
+
+    trayLogger DEBUG $ printf "targetW: %s, targetH: %s"
+                 (show scaledWidth) (show scaledHeight)
+    maybe warnAndReturnOrig return =<<
+      pixbufScaleSimple pixbuf scaledWidth scaledHeight InterpTypeBilinear
 
 themeLoadFlags :: [IconLookupFlags]
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
@@ -174,14 +177,18 @@ getIconPathFromThemePath name themePath = if name == "" then return Nothing else
     return $ (themePath </>) <$> find (isPrefixOf name) fileNames
   else return Nothing
 
-getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO Pixbuf
-getIconPixbufFromByteString width height byteString = do
-  trayLogger DEBUG "Getting Pixbuf from bytestring"
-  bytes <- bytesNew $ Just byteString
-  let bytesPerPixel = 4
-      rowStride = width * bytesPerPixel
-      sampleBits = 8
-  pixbufNewFromBytes bytes ColorspaceRgb True sampleBits width height rowStride
+getIconPixbufFromByteString :: Int32 -> Int32 -> BS.ByteString -> IO (Maybe Pixbuf)
+getIconPixbufFromByteString width height byteString
+  | width <= 0 || height <= 0 = do
+      trayLogger WARNING $ printf "Invalid icon dimensions: %dx%d" width height
+      return Nothing
+  | otherwise = catchGErrorsAsNothing $ do
+      trayLogger DEBUG "Getting Pixbuf from bytestring"
+      bytes <- bytesNew $ Just byteString
+      let bytesPerPixel = 4
+          rowStride = width * bytesPerPixel
+          sampleBits = 8
+      pixbufNewFromBytes bytes ColorspaceRgb True sampleBits width height rowStride
 
 data ItemContext = ItemContext
   { contextName :: DBusTypes.BusName
@@ -379,18 +386,25 @@ buildTray Host
                    itemIsMenu True serviceName
               2 -> return middleClickAction
               _ -> return rightClickAction
+            let logActionError actionName e =
+                  trayLogger WARNING $ printf "%s failed for %s: %s"
+                    (actionName :: String)
+                    (coerce serviceName :: String)
+                    (show e)
             case action of
-              Activate -> void $ IC.activate client serviceName servicePath x y
-              SecondaryActivate -> void $ IC.secondaryActivate client
-                                   serviceName servicePath x y
+              Activate -> catchAny
+                (void $ IC.activate client serviceName servicePath x y)
+                (logActionError "Activate")
+              SecondaryActivate -> catchAny
+                (void $ IC.secondaryActivate client
+                        serviceName servicePath x y)
+                (logActionError "SecondaryActivate")
               PopupMenu -> do
                 menuPath' <- getInfoAttr menuPath Nothing serviceName
                 traverse_
                   (\p -> catchAny
                     (DBusMenu.buildMenu client serviceName p >>= (`popupGtkMenu` event))
-                    (\e -> trayLogger WARNING $ printf "Failed to build menu for %s: %s"
-                      (coerce serviceName :: String)
-                      (show e)))
+                    (logActionError "PopupMenu"))
                   menuPath'
             return False
           _ <- Gtk.onWidgetScrollEvent eventBox $ \event -> do
@@ -409,7 +423,10 @@ buildTray Host
                           ScrollDirectionLeft -> -1
                           ScrollDirectionRight -> 1
                           _ -> 0
-            traverse_ (IC.scroll client serviceName servicePath delta) direction'
+            traverse_ (\d -> catchAny
+              (void $ IC.scroll client serviceName servicePath delta d)
+              (\e -> trayLogger WARNING $ printf "Scroll failed for %s: %s"
+                (coerce serviceName :: String) (show e))) direction'
             return False
 
           MV.modifyMVar_ contextMap $ return . Map.insert serviceName context
@@ -492,15 +509,19 @@ buildTray Host
               else minimumBy orderer largeEnough
             getFromPixmaps (w, h, p) =
               if BS.length p == 0
-              then Nothing
-              else Just $ getIconPixbufFromByteString w h p
+              then return Nothing
+              else getIconPixbufFromByteString w h p
         if null pixmaps
         then getIconPixbufByName size (T.pack name) mpath
-        else sequenceA $ getFromPixmaps selectedPixmap
+        else getFromPixmaps selectedPixmap
 
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-             updateHandler updateType info >> return False
+             catchAny
+               (updateHandler updateType info >> return False)
+               (\e -> do
+                 trayLogger WARNING $ printf "Update handler failed: %s" (show e)
+                 return False)
 
   handlerId <- addUHandler uiUpdateHandler
   _ <- Gtk.onWidgetDestroy trayBox $ removeUHandler handlerId

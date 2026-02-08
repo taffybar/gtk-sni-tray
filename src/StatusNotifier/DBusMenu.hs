@@ -3,6 +3,7 @@ module StatusNotifier.DBusMenu
   ( buildMenu
   ) where
 
+import Control.Exception.Enclosed (catchAny)
 import Control.Monad (forM_, when)
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
@@ -15,6 +16,7 @@ import DBus.Client
 import Data.GI.Base (unsafeCastTo)
 import qualified GI.Gtk as Gtk
 import System.Log.Logger (Priority(..), logM)
+import Text.Printf
 
 dbusMenuLogger :: Priority -> String -> IO ()
 dbusMenuLogger = logM "StatusNotifier.DBusMenu"
@@ -171,9 +173,13 @@ buildGtkMenuItem client dest path node = do
   -- Submenu handling: build children now, and refresh on show via AboutToShow/GetLayout.
   if null (lnChildren node)
     then do
-      _ <- Gtk.onMenuItemActivate item $ do
-        ts <- Gtk.getCurrentEventTime
-        sendClicked client dest path (lnId node) ts
+      _ <- Gtk.onMenuItemActivate item $
+        catchAny
+          (do ts <- Gtk.getCurrentEventTime
+              sendClicked client dest path (lnId node) ts)
+          (\e -> dbusMenuLogger WARNING $
+                 printf "Menu item %d click failed (stale ID?): %s"
+                        (lnId node) (show e))
       pure ()
     else do
       addCssClass itemW "tray-menu-item-has-submenu"
@@ -184,12 +190,16 @@ buildGtkMenuItem client dest path node = do
       -- Populate with the eagerly-fetched layout so submenus are usable even if
       -- the service doesn't support/require lazy updates.
       populateGtkMenu client dest path submenu node
-      let refresh = do
-            -- Allow the service to update the submenu content lazily.
-            _ <- aboutToShow client dest path (lnId node)
-            (_, layout) <- getLayout client dest path (lnId node) 1 []
-            populateGtkMenu client dest path submenu layout
-            Gtk.widgetShowAll submenu
+      let refresh =
+            catchAny
+              (do -- Allow the service to update the submenu content lazily.
+                  _ <- aboutToShow client dest path (lnId node)
+                  (_, layout) <- getLayout client dest path (lnId node) 1 []
+                  populateGtkMenu client dest path submenu layout
+                  Gtk.widgetShowAll submenu)
+              (\e -> dbusMenuLogger WARNING $
+                     printf "Submenu %d refresh failed (stale ID?): %s"
+                            (lnId node) (show e))
       _ <- Gtk.onWidgetShow submenu refresh
       Gtk.menuItemSetSubmenu item (Just submenu)
 
