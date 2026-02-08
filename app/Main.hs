@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-deprecations #-}
 module Main where
 
 import           Control.Monad
@@ -7,7 +8,6 @@ import           Data.Int
 import           Data.Char (toLower)
 import           Data.Maybe
 import           Data.Ratio
-import           Data.Semigroup ((<>))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import           Data.Version (showVersion)
@@ -468,6 +468,7 @@ overlayScaleP =
   <> value (5 % 7)
   )
 
+getColor :: String -> IO Gdk.RGBA
 getColor colorString = do
   rgba <- Gdk.newZeroRGBA
   colorParsed <- Gdk.rGBAParse rgba (T.pack colorString)
@@ -491,8 +492,8 @@ buildWindows :: StrutPosition
              -> Rational
              -> IO ()
 buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
-             startWatcher noStrut length overlayScale = do
-  Gtk.init Nothing
+             startWatcher noStrut barLength overlayScale = do
+  _ <- Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
   detectedBackend <- detectBackend
@@ -510,7 +511,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
     unless startWatcher $
       logM "StatusNotifier" WARNING $
         "Start a watcher first (recommended) or run with --watcher to start one in-process."
-  logger <- getRootLogger
+  _ <- getRootLogger
   pid <- getProcessID
   host <-
     Host.build
@@ -529,7 +530,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
         , strutXPadding = padding
         , strutYPadding = padding
         }
-      defaultRatio = ScreenRatio length
+      defaultRatio = ScreenRatio barLength
       configBase =
         case pos of
           TopPos -> c1 {strutHeight = ExactSize size, strutWidth = defaultRatio}

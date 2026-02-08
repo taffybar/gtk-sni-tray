@@ -112,8 +112,8 @@ catchGErrorsAsLeft action = catch (Right <$> action) (return . Left)
 catchGErrorsAsNothing :: IO a -> IO (Maybe a)
 catchGErrorsAsNothing action = catchGErrorsAsLeft action >>= rightToJustLogLeft
        where rightToJustLogLeft (Right value) = return $ Just value
-             rightToJustLogLeft (Left error) = do
-               trayLogger WARNING $ printf "Encountered error: %s" $ show error
+             rightToJustLogLeft (Left err) = do
+               trayLogger WARNING $ printf "Encountered error: %s" $ show err
                return Nothing
 
 safePixbufNewFromFile :: FilePath -> IO (Maybe Gdk.Pixbuf)
@@ -205,6 +205,7 @@ data TrayParams = TrayParams
   , trayRightClickAction :: TrayClickAction
   }
 
+defaultTrayParams :: TrayParams
 defaultTrayParams = TrayParams
   { trayOrientation = Gtk.OrientationHorizontal
   , trayImageSize = Expand
@@ -445,7 +446,7 @@ buildTray Host
       updateHandler _ _ = return ()
 
       maybeAddOverlayToPixbuf size info pixbuf = do
-        runMaybeT $ do
+        _ <- runMaybeT $ do
           let overlayHeight = floor (fromIntegral size * overlayScale)
           overlayPixbuf <-
             MaybeT $ getOverlayPixBufFromInfo overlayHeight info >>=
@@ -453,8 +454,8 @@ buildTray Host
           lift $ do
             actualOHeight <- getPixbufHeight overlayPixbuf
             actualOWidth <- getPixbufWidth overlayPixbuf
-            mainHeight <- getPixbufHeight pixbuf
-            mainWidth <- getPixbufWidth pixbuf
+            _mainHeight <- getPixbufHeight pixbuf
+            _mainWidth <- getPixbufWidth pixbuf
             pixbufComposite overlayPixbuf pixbuf
               0 0                           -- Top left corner
               actualOWidth actualOHeight    -- Overlay size
@@ -470,13 +471,13 @@ buildTray Host
                   maybeAddOverlayToPixbuf size info)
 
       getPixBufFromInfo size
-                        info@ItemInfo { iconName = name
-                                      , iconThemePath = mpath
-                                      , iconPixmaps = pixmaps
-                                      } = getPixBufFrom size name mpath pixmaps
+                        ItemInfo { iconName = name
+                                 , iconThemePath = mpath
+                                 , iconPixmaps = pixmaps
+                                 } = getPixBufFrom size name mpath pixmaps
 
       getOverlayPixBufFromInfo size
-                               info@ItemInfo
+                               ItemInfo
                                      { overlayIconName = name
                                      , iconThemePath = mpath
                                      , overlayIconPixmaps = pixmaps

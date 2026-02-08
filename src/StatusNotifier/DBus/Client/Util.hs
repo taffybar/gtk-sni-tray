@@ -16,7 +16,6 @@ import qualified DBus.Introspection as I
 import qualified Data.Char as Char
 import qualified Data.Coerce as Coerce
 import qualified Data.Maybe as Maybe
-import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (addDependentFile, makeRelativeToProject)

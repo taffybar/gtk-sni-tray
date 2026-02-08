@@ -17,10 +17,6 @@
 module StatusNotifier.TransparentWindow where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
-import           Data.GI.Base
-import           Foreign.Ptr (castPtr)
-import           GI.Cairo hiding (OperatorOver, OperatorSource)
 import           GI.Cairo.Render
 import           GI.Cairo.Render.Connector
 import qualified GI.Gdk as Gdk
