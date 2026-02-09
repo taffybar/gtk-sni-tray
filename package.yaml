@@ -9,7 +9,6 @@ copyright:           "2018 Ivan Malison"
 extra-source-files:
 - README.md
 - ChangeLog.md
-- dbus-xml/com.canonical.dbusmenu.xml
 
 synopsis:            A standalone StatusNotifierItem/AppIndicator tray
 category:            System
@@ -20,15 +19,12 @@ library:
   exposed-modules:
     - StatusNotifier.TransparentWindow
     - StatusNotifier.Tray
-  other-modules:
-    - StatusNotifier.DBusMenu
-    - StatusNotifier.DBus.Client.Util
-    - StatusNotifier.DBus.Client.DBusMenu
   dependencies:
     - base >= 4.7 && < 5
     - bytestring >= 0.10 && < 0.13
     - containers >= 0.5 && < 0.8
     - dbus >= 1 && < 2
+    - dbus-menu >= 0.1 && < 0.2
     - directory >= 1.2 && < 1.4
     - enclosed-exceptions >= 1.0.0.1 && < 1.1
     - filepath >= 1.3 && < 1.6
@@ -46,7 +42,6 @@ library:
     - hslogger >= 1.2 && < 1.4
     - status-notifier-item >= 0.3.2 && < 0.4
     - text >= 1.2 && < 2.2
-    - template-haskell >= 2.10 && < 2.23
     - transformers >= 0.4 && < 0.7
     - transformers-base >= 0.4 && < 0.5
     - unix >= 2.7 && < 2.9

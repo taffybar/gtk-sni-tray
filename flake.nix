@@ -19,8 +19,14 @@
       inputs.git-ignore-nix.follows = "git-ignore-nix";
       inputs.flake-utils.follows = "flake-utils";
     };
+    dbus-menu = {
+      url = "github:taffybar/dbus-menu";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.git-ignore-nix.follows = "git-ignore-nix";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
-  outputs = { self, flake-utils, nixpkgs, git-ignore-nix, status-notifier-item, gtk-strut }:
+  outputs = { self, flake-utils, nixpkgs, git-ignore-nix, status-notifier-item, gtk-strut, dbus-menu }:
   flake-utils.lib.eachDefaultSystem (system: let
     inherit (nixpkgs) lib;
     pkgs = import nixpkgs {
@@ -60,6 +66,7 @@
       };
       status-notifier-item = status-notifier-item.overlay or status-notifier-item.overlays.default;
       gtk-strut = gtk-strut.overlay or gtk-strut.overlays.default;
+      dbus-menu = dbus-menu.overlay or dbus-menu.overlays.default;
     };
   };
 }

@@ -39,7 +39,7 @@ import qualified GI.Gtk as Gtk
 import           GI.Gtk.Flags
 import           GI.Gtk.Objects.IconTheme
 import           Graphics.UI.GIGtkStrut
-import qualified StatusNotifier.DBusMenu as DBusMenu
+import qualified DBusMenu
 import           StatusNotifier.Host.Service
 import qualified StatusNotifier.Item.Client as IC
 import           System.Directory
