@@ -1,5 +1,12 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.13.0
+
+- Use extracted `dbus-menu` library instead of inline DBusMenu implementation.
+- Reduce default overlay icon scale from 60% to 40%.
+- Fix: clamp scaled pixbuf dimensions to >= 1 to prevent GDK assertion failure.
+- Bump `dbus-menu` lower bound to 0.1.1.
+
 ## 0.1.12.0
 
 - Add `trayCenterIcons` field to `TrayParams` and `--center-icons` CLI flag to
