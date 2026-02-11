@@ -1,5 +1,9 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.13.2
+
+- Bump `dbus-menu` lower bound to 0.1.3.1.
+
 ## 0.1.13.1
 
 - Bump `dbus-menu` lower bound to 0.1.3 for menu-level click dispatch.
