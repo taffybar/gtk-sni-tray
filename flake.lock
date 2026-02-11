@@ -129,11 +129,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1770253964,
-        "narHash": "sha256-tBbdN+xJmxNEZZSXYUxvVEeldzEjoL8WA45h3xU9U4w=",
+        "lastModified": 1770816315,
+        "narHash": "sha256-5+yuQgCWvh1nU7FpWOyNdQnD+ZrCWM50kQ01n8dVrHE=",
         "owner": "taffybar",
         "repo": "status-notifier-item",
-        "rev": "08294f53c666aa85375364d5e08e952aa7510991",
+        "rev": "6f089ed634b9b6fb51dec0aaa71ac161593a42b8",
         "type": "github"
       },
       "original": {
