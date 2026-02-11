@@ -1,5 +1,13 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.14.0
+
+- Add tray priority matching with a new `TrayPriorityConfig`.
+- Add `buildTrayWithPriority` while keeping `buildTray` behavior unchanged.
+- Add matcher helpers and combinators so matching can target service name/path,
+  menu path, item id/category/status, icon name/title, tooltip text, and
+  `itemIsMenu`.
+
 ## 0.1.13.2
 
 - Bump `dbus-menu` lower bound to 0.1.3.1.

@@ -17,7 +17,6 @@ import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Foldable (traverse_)
 import           Data.GI.Base (unsafeCastTo)
-import qualified Data.GI.Base.ManagedPtr as ManagedPtr
 import           Data.GI.Base.GError
 import           Data.Int
 import           Data.List
@@ -206,6 +205,179 @@ data TrayClickAction = Activate | SecondaryActivate | PopupMenu
 
 data MenuBackend = LibDBusMenu | HaskellDBusMenu deriving (Eq, Show)
 
+data TrayItemMatcher = TrayItemMatcher
+  { trayItemMatcherDescription :: String
+  , trayItemMatcherPredicate :: ItemInfo -> Bool
+  }
+
+data TrayPriorityConfig = TrayPriorityConfig
+  { trayPriorityMatchers :: [TrayItemMatcher]
+  }
+
+defaultTrayPriorityConfig :: TrayPriorityConfig
+defaultTrayPriorityConfig = TrayPriorityConfig { trayPriorityMatchers = [] }
+
+mkTrayItemMatcher :: String -> (ItemInfo -> Bool) -> TrayItemMatcher
+mkTrayItemMatcher = TrayItemMatcher
+
+trayMatchAny :: [TrayItemMatcher] -> TrayItemMatcher
+trayMatchAny matchers = mkTrayItemMatcher "any" $ \info ->
+  any (\matcher -> trayItemMatcherPredicate matcher info) matchers
+
+trayMatchAll :: [TrayItemMatcher] -> TrayItemMatcher
+trayMatchAll matchers = mkTrayItemMatcher "all" $ \info ->
+  all (\matcher -> trayItemMatcherPredicate matcher info) matchers
+
+trayMatchNot :: TrayItemMatcher -> TrayItemMatcher
+trayMatchNot matcher =
+  mkTrayItemMatcher ("not(" <> trayItemMatcherDescription matcher <> ")") $
+    not . trayItemMatcherPredicate matcher
+
+normalizeText :: T.Text -> T.Text
+normalizeText = T.toCaseFold
+
+containsCI :: T.Text -> T.Text -> Bool
+containsCI needle haystack =
+  normalizeText needle `T.isInfixOf` normalizeText haystack
+
+equalsCI :: T.Text -> T.Text -> Bool
+equalsCI left right = normalizeText left == normalizeText right
+
+matchOnTextFields ::
+  String ->
+  (T.Text -> T.Text -> Bool) ->
+  [ItemInfo -> Maybe T.Text] ->
+  T.Text ->
+  TrayItemMatcher
+matchOnTextFields matcherName comparator fieldGetters target =
+  mkTrayItemMatcher matcherName $ \info ->
+    any
+      (\fieldGetter -> maybe False (comparator target) (fieldGetter info))
+      fieldGetters
+
+serviceNameText :: ItemInfo -> T.Text
+serviceNameText = T.pack . (coerce :: DBusTypes.BusName -> String) . itemServiceName
+
+servicePathText :: ItemInfo -> T.Text
+servicePathText = T.pack . (coerce :: DBusTypes.ObjectPath -> String) . itemServicePath
+
+menuPathText :: ItemInfo -> Maybe T.Text
+menuPathText = fmap (T.pack . (coerce :: DBusTypes.ObjectPath -> String)) . menuPath
+
+itemIdText :: ItemInfo -> Maybe T.Text
+itemIdText = fmap T.pack . itemId
+
+itemCategoryText :: ItemInfo -> Maybe T.Text
+itemCategoryText = fmap T.pack . itemCategory
+
+itemStatusText :: ItemInfo -> Maybe T.Text
+itemStatusText = fmap T.pack . itemStatus
+
+iconNameText :: ItemInfo -> T.Text
+iconNameText = T.pack . iconName
+
+iconTitleText :: ItemInfo -> T.Text
+iconTitleText = T.pack . iconTitle
+
+tooltipTitleText :: ItemInfo -> Maybe T.Text
+tooltipTitleText info = (\(_, _, titleText, _) -> T.pack titleText) <$> itemToolTip info
+
+tooltipBodyText :: ItemInfo -> Maybe T.Text
+tooltipBodyText info = (\(_, _, _, bodyText) -> T.pack bodyText) <$> itemToolTip info
+
+trayMatchServiceNameContains :: T.Text -> TrayItemMatcher
+trayMatchServiceNameContains =
+  matchOnTextFields "service-name-contains" containsCI [Just . serviceNameText]
+
+trayMatchServiceNameEquals :: T.Text -> TrayItemMatcher
+trayMatchServiceNameEquals =
+  matchOnTextFields "service-name-equals" equalsCI [Just . serviceNameText]
+
+trayMatchServicePathContains :: T.Text -> TrayItemMatcher
+trayMatchServicePathContains =
+  matchOnTextFields "service-path-contains" containsCI [Just . servicePathText]
+
+trayMatchServicePathEquals :: T.Text -> TrayItemMatcher
+trayMatchServicePathEquals =
+  matchOnTextFields "service-path-equals" equalsCI [Just . servicePathText]
+
+trayMatchMenuPathContains :: T.Text -> TrayItemMatcher
+trayMatchMenuPathContains =
+  matchOnTextFields "menu-path-contains" containsCI [menuPathText]
+
+trayMatchMenuPathEquals :: T.Text -> TrayItemMatcher
+trayMatchMenuPathEquals =
+  matchOnTextFields "menu-path-equals" equalsCI [menuPathText]
+
+trayMatchItemIdContains :: T.Text -> TrayItemMatcher
+trayMatchItemIdContains =
+  matchOnTextFields "item-id-contains" containsCI [itemIdText]
+
+trayMatchItemIdEquals :: T.Text -> TrayItemMatcher
+trayMatchItemIdEquals =
+  matchOnTextFields "item-id-equals" equalsCI [itemIdText]
+
+trayMatchItemCategoryContains :: T.Text -> TrayItemMatcher
+trayMatchItemCategoryContains =
+  matchOnTextFields "item-category-contains" containsCI [itemCategoryText]
+
+trayMatchItemCategoryEquals :: T.Text -> TrayItemMatcher
+trayMatchItemCategoryEquals =
+  matchOnTextFields "item-category-equals" equalsCI [itemCategoryText]
+
+trayMatchStatusContains :: T.Text -> TrayItemMatcher
+trayMatchStatusContains =
+  matchOnTextFields "item-status-contains" containsCI [itemStatusText]
+
+trayMatchStatusEquals :: T.Text -> TrayItemMatcher
+trayMatchStatusEquals =
+  matchOnTextFields "item-status-equals" equalsCI [itemStatusText]
+
+trayMatchIconNameContains :: T.Text -> TrayItemMatcher
+trayMatchIconNameContains =
+  matchOnTextFields "icon-name-contains" containsCI [Just . iconNameText]
+
+trayMatchIconNameEquals :: T.Text -> TrayItemMatcher
+trayMatchIconNameEquals =
+  matchOnTextFields "icon-name-equals" equalsCI [Just . iconNameText]
+
+trayMatchIconTitleContains :: T.Text -> TrayItemMatcher
+trayMatchIconTitleContains =
+  matchOnTextFields "icon-title-contains" containsCI [Just . iconTitleText]
+
+trayMatchIconTitleEquals :: T.Text -> TrayItemMatcher
+trayMatchIconTitleEquals =
+  matchOnTextFields "icon-title-equals" equalsCI [Just . iconTitleText]
+
+trayMatchTooltipContains :: T.Text -> TrayItemMatcher
+trayMatchTooltipContains =
+  matchOnTextFields "tooltip-contains" containsCI [tooltipTitleText, tooltipBodyText]
+
+trayMatchTooltipEquals :: T.Text -> TrayItemMatcher
+trayMatchTooltipEquals =
+  matchOnTextFields "tooltip-equals" equalsCI [tooltipTitleText, tooltipBodyText]
+
+trayMatchAnyTextContains :: T.Text -> TrayItemMatcher
+trayMatchAnyTextContains =
+  matchOnTextFields
+    "any-text-contains"
+    containsCI
+    [ Just . serviceNameText
+    , Just . servicePathText
+    , menuPathText
+    , itemIdText
+    , itemCategoryText
+    , itemStatusText
+    , Just . iconNameText
+    , Just . iconTitleText
+    , tooltipTitleText
+    , tooltipBodyText
+    ]
+
+trayMatchIsMenu :: Bool -> TrayItemMatcher
+trayMatchIsMenu expected =
+  mkTrayItemMatcher "is-menu" $ \info -> itemIsMenu info == expected
+
 data TrayParams = TrayParams
   { trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
@@ -234,7 +406,11 @@ defaultTrayParams = TrayParams
   }
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
-buildTray Host
+buildTray host client params =
+  buildTrayWithPriority host client params defaultTrayPriorityConfig
+
+buildTrayWithPriority :: Host -> Client -> TrayParams -> TrayPriorityConfig -> IO Gtk.Box
+buildTrayWithPriority Host
             { itemInfoMap = getInfoMap
             , addUpdateHandler = addUHandler
             , removeUpdateHandler = removeUHandler
@@ -250,7 +426,8 @@ buildTray Host
                      , trayRightClickAction = rightClickAction
                      , trayMenuBackend = menuBackend
                      , trayCenterIcons = centerIcons
-                     } = do
+                     }
+          TrayPriorityConfig { trayPriorityMatchers = priorityMatchers } = do
   trayLogger INFO "Building tray"
 
   trayBox <- Gtk.boxNew orientation 0
@@ -275,6 +452,35 @@ buildTray Host
 
       getInfo :: ItemInfo -> DBusTypes.BusName -> IO ItemInfo
       getInfo = getInfoAttr id
+
+      getPriorityIndex info =
+        fromMaybe
+          (length priorityMatchers)
+          (findIndex (\matcher -> trayItemMatcherPredicate matcher info) priorityMatchers)
+
+      reorderTrayByPriority = when (not (null priorityMatchers)) $ do
+        currentChildren <- Gtk.containerGetChildren trayBox
+        contexts <- MV.readMVar contextMap
+        contextWidgets <- forM (Map.toList contexts) $
+          \(busName, ItemContext { contextButton = button }) -> do
+            widget <- Gtk.toWidget button
+            return (busName, widget)
+        infoMap <- getInfoMap
+        let childRows =
+              [ let busName = fst <$> find (\(_, widget) -> widget == child) contextWidgets
+                    itemInfo = busName >>= (`Map.lookup` infoMap)
+                    priority = maybe (length priorityMatchers) getPriorityIndex itemInfo
+                 in (priority, currentIndex, child)
+                | (currentIndex, child) <- zip [0 :: Int ..] currentChildren
+              ]
+            sortedChildren =
+              [ child
+                | (_, _, child) <-
+                    sortOn (\(priority, currentIndex, _) -> (priority, currentIndex)) childRows
+              ]
+        forM_ (zip [0 :: Int ..] sortedChildren) $
+          \(newIndex, child) ->
+            Gtk.boxReorderChild trayBox child (fromIntegral newIndex)
 
       updateIconFromInfo info@ItemInfo { itemServiceName = name } =
         getContext name >>= updateIcon
@@ -579,7 +785,9 @@ buildTray Host
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
              catchAny
-               (updateHandler updateType info >> return False)
+               (updateHandler updateType info
+                >> reorderTrayByPriority
+                >> return False)
                (\e -> do
                  trayLogger WARNING $ printf "Update handler failed: %s" (show e)
                  return False)
