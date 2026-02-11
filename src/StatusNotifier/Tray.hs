@@ -219,6 +219,20 @@ data TrayParams = TrayParams
   , trayCenterIcons :: Bool
   }
 
+type TrayItemMatcher = ItemInfo -> Bool
+
+-- | Matching rules used to prioritize tray entries.
+-- For now, an empty list means no extra prioritization.
+data TrayPriorityConfig = TrayPriorityConfig
+  { trayPriorityMatchers :: [TrayItemMatcher]
+  }
+
+defaultTrayPriorityConfig :: TrayPriorityConfig
+defaultTrayPriorityConfig =
+  TrayPriorityConfig
+    { trayPriorityMatchers = []
+    }
+
 defaultTrayParams :: TrayParams
 defaultTrayParams = TrayParams
   { trayOrientation = Gtk.OrientationHorizontal
@@ -232,6 +246,11 @@ defaultTrayParams = TrayParams
   , trayMenuBackend = HaskellDBusMenu
   , trayCenterIcons = False
   }
+
+buildTrayWithPriority ::
+  Host -> Client -> TrayParams -> TrayPriorityConfig -> IO Gtk.Box
+buildTrayWithPriority host client params _ =
+  buildTray host client params
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
 buildTray Host
