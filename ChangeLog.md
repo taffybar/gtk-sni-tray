@@ -1,5 +1,11 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.14.1
+
+- Update the Nix flake lock for `status-notifier-item` to pick up a host-side
+  deduplication fix for items that re-register under different bus names after
+  watcher restart.
+
 ## 0.1.14.0
 
 - Add tray priority matching with a new `TrayPriorityConfig`.
