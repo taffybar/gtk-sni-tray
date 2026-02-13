@@ -1,5 +1,10 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.14.2
+
+- Relax executable `optparse-applicative` upper bound to `< 0.20` for GHC 9.12 snapshots.
+- Bump `dbus-menu` lower bound to `0.1.3.2`.
+
 ## 0.1.14.1
 
 - Update the Nix flake lock for `status-notifier-item` to pick up a host-side
