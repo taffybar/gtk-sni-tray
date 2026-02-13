@@ -38,3 +38,13 @@ For Nix users, this repository provides a flake dev shell. If you use `direnv`,
 
 If you see a Cabal error about missing pkg-config packages, `scripts/cabal-run`
 does a quick preflight check and prints a more direct message.
+
+Development
+-----------
+
+Formatting is done with `ormolu` (available in the flake dev shell):
+
+```sh
+scripts/fmt
+scripts/fmt-check
+```
