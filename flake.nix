@@ -36,43 +36,30 @@
     };
   in
   {
-    # Keep the default dev shell lightweight so `direnv reload` doesn't have to
-    # build a full GHC-with-packages environment (which can be slow and/or
-    # require building git-based Haskell deps).
-    devShells.default = pkgs.mkShell {
-      nativeBuildInputs = (with pkgs; [
-        pkg-config
-        dbus
-      ]) ++ (with pkgs.haskellPackages; [
-        ghc
-        cabal-install
-        haskell-language-server
-      ]);
-      buildInputs = with pkgs; [
-        gtk3
-        gtk-layer-shell
-      ];
-      shellHook = ''
-        # ld.gold has been observed to crash (Bus error) on some systems during
-        # GHC links. Prefer the more conservative bfd linker.
+    # Default to a "wired" Haskell shell so `cabal build` already has a package
+    # database with the project's Haskell dependencies (like taffybar does).
+	    devShells.default = pkgs.haskellPackages.shellFor {
+	      packages = p: [ p.gtk-sni-tray ];
+	      buildInputs = with pkgs; [
+	        gtk3
+	        gtk-layer-shell
+	        gobject-introspection
+	        libdbusmenu-gtk3
+	        libsysprof-capture
+	        pcre2.dev
+	      ];
+		      nativeBuildInputs = (with pkgs; [
+		        pkg-config
+		        dbus
+		      ]) ++ (with pkgs.haskellPackages; [
+		        cabal-install
+		        haskell-language-server
+		      ]);
+	      shellHook = ''
         export NIX_LDFLAGS="''${NIX_LDFLAGS:-} -fuse-ld=bfd"
       '';
     };
 
-    # A heavier shell that wires the project into nixpkgs' Haskell package set.
-    # Useful for fully-Nix builds, but intentionally not the default.
-    devShells.shellFor = pkgs.haskellPackages.shellFor {
-      packages = p: [ p.gtk-sni-tray ];
-      buildInputs = with pkgs; [
-        gtk-layer-shell
-      ];
-      nativeBuildInputs = with pkgs.haskellPackages; [
-        cabal-install haskell-language-server
-      ];
-      shellHook = ''
-        export NIX_LDFLAGS="''${NIX_LDFLAGS:-} -fuse-ld=bfd"
-      '';
-    };
     packages.default = pkgs.haskellPackages.gtk-sni-tray;
   }) // {
     overlays = {
