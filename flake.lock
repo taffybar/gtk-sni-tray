@@ -13,11 +13,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1770753441,
-        "narHash": "sha256-ycJexWPCSlLriDAouT3PvRnbwByeGF6bsQrvWcY1eGU=",
+        "lastModified": 1770957161,
+        "narHash": "sha256-jXLEo7toB/1Vm5VUPYLsdforwT23Cn3KAajhZhDbqG8=",
         "owner": "taffybar",
         "repo": "dbus-menu",
-        "rev": "83f914ab70485331f4e45945251557e5c7ea50fa",
+        "rev": "c18b84f7f251e520d6f6fcef290cfdd0b45ba057",
         "type": "github"
       },
       "original": {
