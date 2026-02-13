@@ -49,6 +49,10 @@ import           Foreign.Ptr (Ptr)
 trayLogger :: Priority -> String -> IO ()
 trayLogger = logM "StatusNotifier.Tray"
 
+-- | Optional post-processing hook for item icons. This is applied after scaling
+-- and overlay composition.
+type PixbufTransform = Gtk.Image -> Pixbuf -> IO Pixbuf
+
 logItemInfo :: ItemInfo -> String -> IO ()
 logItemInfo info message =
   trayLogger INFO $ printf "%s - %s pixmap count: %s" message
@@ -435,10 +439,18 @@ defaultTrayParams = TrayParams
 
 buildTray :: Host -> Client -> TrayParams -> IO Gtk.Box
 buildTray host client params =
-  buildTrayWithPriority host client params defaultTrayPriorityConfig
+  buildTrayWithPixbufTransform host client params Nothing
 
 buildTrayWithPriority :: Host -> Client -> TrayParams -> TrayPriorityConfig -> IO Gtk.Box
-buildTrayWithPriority Host
+buildTrayWithPriority host client params priorityConfig =
+  buildTrayWithPriorityAndPixbufTransform host client params priorityConfig Nothing
+
+buildTrayWithPixbufTransform :: Host -> Client -> TrayParams -> Maybe PixbufTransform -> IO Gtk.Box
+buildTrayWithPixbufTransform host client params mTransform =
+  buildTrayWithPriorityAndPixbufTransform host client params defaultTrayPriorityConfig mTransform
+
+buildTrayWithPriorityAndPixbufTransform :: Host -> Client -> TrayParams -> TrayPriorityConfig -> Maybe PixbufTransform -> IO Gtk.Box
+buildTrayWithPriorityAndPixbufTransform Host
             { itemInfoMap = getInfoMap
             , addUpdateHandler = addUHandler
             , removeUpdateHandler = removeUHandler
@@ -455,7 +467,8 @@ buildTrayWithPriority Host
                      , trayMenuBackend = menuBackend
                      , trayCenterIcons = centerIcons
                      }
-          TrayPriorityConfig { trayPriorityMatchers = priorityMatchers } = do
+          TrayPriorityConfig { trayPriorityMatchers = priorityMatchers }
+          mTransform = do
   trayLogger INFO "Building tray"
 
   trayBox <- Gtk.boxNew orientation 0
@@ -510,6 +523,13 @@ buildTrayWithPriority Host
           \(newIndex, child) ->
             Gtk.boxReorderChild trayBox child (fromIntegral newIndex)
 
+      applyTransform :: Gtk.Image -> Maybe Pixbuf -> IO (Maybe Pixbuf)
+      applyTransform _ Nothing = return Nothing
+      applyTransform image (Just pb) =
+        case mTransform of
+          Nothing -> return (Just pb)
+          Just f -> Just <$> f image pb
+
       updateIconFromInfo info@ItemInfo { itemServiceName = name } =
         getContext name >>= updateIcon
         where updateIcon Nothing = updateHandler ItemAdded info
@@ -517,7 +537,9 @@ buildTrayWithPriority Host
                 size <- case imageSize of
                           TrayImageSize size -> return size
                           Expand -> Gtk.widgetGetAllocation image >>= getSize
-                getScaledPixBufFromInfo size info >>=
+                getScaledPixBufFromInfo size info
+                  >>= applyTransform image
+                  >>=
                                   let handlePixbuf mpbuf =
                                         if isJust mpbuf
                                         then Gtk.imageSetFromPixbuf image mpbuf
@@ -554,55 +576,57 @@ buildTrayWithPriority Host
           Gtk.widgetGetStyleContext eventBox >>=
             flip Gtk.styleContextAddClass "tray-icon-button"
 
-          image <-
-            case imageSize of
-              Expand -> do
-                image <- Gtk.imageNew
-                lastAllocation <- MV.newMVar Nothing
+          image <- Gtk.imageNew
 
-                let setPixbuf allocation =
-                      do
-                        size <- getSize allocation
+          case imageSize of
+            Expand -> do
+              lastAllocation <- MV.newMVar Nothing
 
-                        actualWidth <- Gdk.getRectangleWidth allocation
-                        actualHeight <- Gdk.getRectangleHeight allocation
+              let setPixbuf allocation =
+                    do
+                      size <- getSize allocation
 
-                        requestResize <- MV.modifyMVar lastAllocation $ \previous ->
-                          let thisTime = Just (size, actualWidth, actualHeight)
-                          in return (thisTime, thisTime /= previous)
+                      actualWidth <- Gdk.getRectangleWidth allocation
+                      actualHeight <- Gdk.getRectangleHeight allocation
 
-                        trayLogger DEBUG $
-                                   printf
-                                   ("Allocating image size %s, width %s," <>
-                                    " height %s, resize %s")
-                                   (show size)
-                                   (show actualWidth)
-                                   (show actualHeight)
-                                   (show requestResize)
+                      requestResize <- MV.modifyMVar lastAllocation $ \previous ->
+                        let thisTime = Just (size, actualWidth, actualHeight)
+                        in return (thisTime, thisTime /= previous)
 
-                        when requestResize $ do
-                          trayLogger DEBUG "Requesting resize"
-                          pixBuf <- getInfo info serviceName >>=
-                                    getScaledPixBufFromInfo size
-                          when (isNothing pixBuf) $
-                               trayLogger WARNING $
-                                          printf "Got null pixbuf for info %s" $
-                                          showInfo info
-                          Gtk.imageSetFromPixbuf image pixBuf
-                          void $ traverse
-                                 (\pb -> do
-                                    width <- pixbufGetWidth pb
-                                    height <- pixbufGetHeight pb
-                                    Gtk.widgetSetSizeRequest image width height)
-                                 pixBuf
-                          void (Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-                                   Gtk.widgetQueueResize image >> return False)
+                      trayLogger DEBUG $
+                                 printf
+                                 ("Allocating image size %s, width %s," <>
+                                  " height %s, resize %s")
+                                 (show size)
+                                 (show actualWidth)
+                                 (show actualHeight)
+                                 (show requestResize)
 
-                _ <- Gtk.onWidgetSizeAllocate image setPixbuf
-                return image
-              TrayImageSize size -> do
-                pixBuf <- getScaledPixBufFromInfo size info
-                Gtk.imageNewFromPixbuf pixBuf
+                      when requestResize $ do
+                        trayLogger DEBUG "Requesting resize"
+                        pixBuf0 <- getInfo info serviceName >>=
+                                  getScaledPixBufFromInfo size
+                        pixBuf <- applyTransform image pixBuf0
+                        when (isNothing pixBuf) $
+                             trayLogger WARNING $
+                                        printf "Got null pixbuf for info %s" $
+                                        showInfo info
+                        Gtk.imageSetFromPixbuf image pixBuf
+                        void $ traverse
+                               (\pb -> do
+                                  width <- pixbufGetWidth pb
+                                  height <- pixbufGetHeight pb
+                                  Gtk.widgetSetSizeRequest image width height)
+                               pixBuf
+                        void (Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+                                 Gtk.widgetQueueResize image >> return False)
+
+              _ <- Gtk.onWidgetSizeAllocate image setPixbuf
+              return ()
+            TrayImageSize size -> do
+              pixBuf0 <- getScaledPixBufFromInfo size info
+              pixBuf <- applyTransform image pixBuf0
+              Gtk.imageSetFromPixbuf image pixBuf
 
           Gtk.widgetGetStyleContext image >>=
              flip Gtk.styleContextAddClass "tray-icon-image"

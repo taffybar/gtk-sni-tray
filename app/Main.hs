@@ -17,6 +17,7 @@ import qualified GI.Gtk as Gtk
 import           Graphics.UI.GIGtkStrut
 import           Options.Applicative
 import qualified StatusNotifier.Host.Service as Host
+import qualified StatusNotifier.Icon.Pixbuf as IconPixbuf
 import           StatusNotifier.TransparentWindow
 import           StatusNotifier.Tray
 import           System.Log.Logger
@@ -32,6 +33,12 @@ import qualified GI.GtkLayerShell as GtkLayerShell
 data Backend = BackendX11 | BackendWayland deriving (Eq, Show)
 
 data BackendChoice = BackendAuto | BackendX11Choice | BackendWaylandChoice
+  deriving (Eq, Show, Read)
+
+data IconRecolorMode
+  = IconRecolorNone
+  | IconRecolorMono
+  | IconRecolorDuotone
   deriving (Eq, Show, Read)
 
 detectBackend :: IO Backend
@@ -474,6 +481,23 @@ overlayScaleP =
   <> value (5 % 7)
   )
 
+iconRecolorModeP :: Parser IconRecolorMode
+iconRecolorModeP =
+  option (eitherReader parseMode)
+    ( long "icon-recolor"
+        <> help "Recolor icons based on their alpha mask: none (default) | mono | duotone"
+        <> value IconRecolorNone
+        <> metavar "MODE"
+    )
+  where
+    parseMode s =
+      case map toLower s of
+        "none" -> Right IconRecolorNone
+        "mono" -> Right IconRecolorMono
+        "duo" -> Right IconRecolorDuotone
+        "duotone" -> Right IconRecolorDuotone
+        _ -> Left "expected one of: none, mono, duotone"
+
 menuBackendP :: Parser MenuBackend
 menuBackendP =
   option (eitherReader parseMenuBackend)
@@ -513,9 +537,10 @@ buildWindows :: StrutPosition
              -> Rational
              -> Rational
              -> MenuBackend
+             -> IconRecolorMode
              -> IO ()
 buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
-             centerIcons startWatcher noStrut barLength overlayScale menuBackend = do
+             centerIcons startWatcher noStrut barLength overlayScale menuBackend iconRecolorMode = do
   _ <- Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -569,8 +594,36 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
                 TopPos -> Gtk.OrientationHorizontal
                 BottomPos -> Gtk.OrientationHorizontal
                 _ -> Gtk.OrientationVertical
+            mixWord8 t a b =
+              let ta = fromIntegral a :: Double
+                  tb = fromIntegral b :: Double
+                  out = ta + max 0 (min 1 t) * (tb - ta)
+              in fromIntegral (max (0 :: Int) (min 255 (round out)))
+            mixRgb8 t (IconPixbuf.Rgb8 r g b) (IconPixbuf.Rgb8 r2 g2 b2) =
+              IconPixbuf.Rgb8 (mixWord8 t r r2) (mixWord8 t g g2) (mixWord8 t b b2)
+            mkIconTransform =
+              case iconRecolorMode of
+                IconRecolorNone -> Nothing
+                IconRecolorMono ->
+                  Just $ \image pb -> do
+                    ctx <- Gtk.widgetGetStyleContext image
+                    fg <- Gtk.styleContextGetColor ctx [Gtk.StateFlagsNormal]
+                    fg8 <- IconPixbuf.rgb8FromGdkRGBA fg
+                    mpb <- IconPixbuf.recolorPixbufMonochrome fg8 pb
+                    return $ fromMaybe pb mpb
+                IconRecolorDuotone ->
+                  Just $ \image pb -> do
+                    ctx <- Gtk.widgetGetStyleContext image
+                    fg <- Gtk.styleContextGetColor ctx [Gtk.StateFlagsNormal]
+                    fg8 <- IconPixbuf.rgb8FromGdkRGBA fg
+                    let black = IconPixbuf.Rgb8 0 0 0
+                        white = IconPixbuf.Rgb8 255 255 255
+                        dark = mixRgb8 0.35 fg8 black
+                        light = mixRgb8 0.35 fg8 white
+                    mpb <- IconPixbuf.recolorPixbufDuotone dark light pb
+                    return $ fromMaybe pb mpb
         tray <-
-          buildTray host client
+          buildTrayWithPixbufTransform host client
             TrayParams
             { trayOrientation = orientation
             , trayImageSize = Expand
@@ -583,6 +636,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
             , trayMenuBackend = menuBackend
             , trayCenterIcons = centerIcons
             }
+            mkIconTransform
         window <- Gtk.windowNew Gtk.WindowTypeToplevel
         Gtk.windowSetResizable window False
         Gtk.windowSetSkipTaskbarHint window True
@@ -616,7 +670,7 @@ parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
   monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*>
   centerIconsP <*> startWatcherP <*>
-  noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP
+  noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP <*> iconRecolorModeP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption
