@@ -30,7 +30,6 @@ import qualified GI.GLib as GLib
 import           GI.GLib.Structs.Bytes
 import qualified GI.Gdk as Gdk
 import           GI.Gdk.Enums
-import           GI.Gdk.Objects.Screen
 import           GI.Gdk.Structs.EventScroll
 import           GI.GdkPixbuf.Enums
 import           GI.GdkPixbuf.Objects.Pixbuf as Gdk
@@ -96,20 +95,47 @@ scalePixbufToSize size orientation pixbuf = do
 themeLoadFlags :: [IconLookupFlags]
 themeLoadFlags = [IconLookupFlagsGenericFallback, IconLookupFlagsUseBuiltin]
 
-getThemeWithDefaultFallbacks :: String -> IO IconTheme
-getThemeWithDefaultFallbacks themePath = do
-  themeForIcon <- iconThemeNew
-  defaultTheme <- iconThemeGetDefault
+getThemeWithOptionalSearchPath :: Maybe String -> IO IconTheme
+getThemeWithOptionalSearchPath themePath = do
+  theme <- iconThemeGetDefault
+  forM_ (themePath >>= nonEmpty) $ \p -> do
+    -- Respect the user's configured icon theme by using GTK's default theme
+    -- object, but include any item-provided IconThemePath as an additional
+    -- search path.
+    --
+    -- Some items provide IconThemePath pointing inside a theme dir, e.g.:
+    --   .../Papirus/64x64/mimetypes
+    -- GTK expects search paths that contain theme directories, so also try to
+    -- append the parent directory of any ancestor that contains index.theme.
+    pathsToAppend <- pathsForIconThemePath p
+    existing <- iconThemeGetSearchPath theme
+    forM_ pathsToAppend $ \p' ->
+      unless (p' `elem` existing) $ iconThemeAppendSearchPath theme p'
+  return theme
+  where
+    nonEmpty "" = Nothing
+    nonEmpty x = Just x
 
-  _ <- runMaybeT $ do
-    screen <- MaybeT screenGetDefault
-    lift $ iconThemeSetScreen themeForIcon screen
-
-  filePaths <- iconThemeGetSearchPath defaultTheme
-  iconThemeAppendSearchPath themeForIcon themePath
-  mapM_ (iconThemeAppendSearchPath themeForIcon) filePaths
-
-  return themeForIcon
+pathsForIconThemePath :: FilePath -> IO [FilePath]
+pathsForIconThemePath rawPath = do
+  mThemeDir <- findAncestorWithIndexTheme 8 rawPath
+  let base =
+        case mThemeDir of
+          Nothing -> []
+          Just themeDir -> [takeDirectory themeDir]
+  return $ nub $ base ++ [rawPath]
+  where
+    findAncestorWithIndexTheme :: Int -> FilePath -> IO (Maybe FilePath)
+    findAncestorWithIndexTheme 0 _ = return Nothing
+    findAncestorWithIndexTheme n p = do
+      hasIndex <- doesFileExist (p </> "index.theme")
+      if hasIndex
+        then return (Just p)
+        else do
+          let parent = takeDirectory p
+          if parent == p
+            then return Nothing
+            else findAncestorWithIndexTheme (n - 1) parent
 
 catchGErrorsAsLeft :: IO a -> IO (Either GError a)
 catchGErrorsAsLeft action = catch (Right <$> action) (return . Left)
@@ -134,36 +160,38 @@ safePixbufNewFromFile =
 getIconPixbufByName :: Int32 -> T.Text -> Maybe String -> IO (Maybe Pixbuf)
 getIconPixbufByName size name themePath = do
   trayLogger DEBUG $ printf "Getting Pixbuf from name for %s" name
-  let nonEmptyThemePath = themePath >>= (\x -> if x == "" then Nothing else Just x)
-  themeForIcon <-
-    maybe iconThemeGetDefault getThemeWithDefaultFallbacks nonEmptyThemePath
+  themeForIcon <- getThemeWithOptionalSearchPath themePath
 
   let panelName = T.pack $ printf "%s-panel" name
-  hasPanelIcon <- iconThemeHasIcon themeForIcon panelName
-  hasIcon <- iconThemeHasIcon themeForIcon name
+  -- Avoid relying on iconThemeHasIcon: it can be overly strict when fallback
+  -- loading is enabled. Just try to load and fall back if it fails.
+  let tryLoad :: T.Text -> IO (Maybe Pixbuf)
+      tryLoad iconName =
+        catchAny (iconThemeLoadIcon themeForIcon iconName size themeLoadFlags)
+                 (const $ pure Nothing)
 
-  if hasIcon || hasPanelIcon
+  themedPixbuf <- do
+    pbPanel <- tryLoad panelName
+    case pbPanel of
+      Just _ -> return pbPanel
+      Nothing -> tryLoad name
 
-  then do
-    let targetName = if hasPanelIcon then panelName else name
-    trayLogger DEBUG $ printf "Found icon %s in theme" name
-    catchAny (iconThemeLoadIcon themeForIcon targetName size themeLoadFlags)
-             (const $ pure Nothing)
-
-  else do
-    trayLogger DEBUG $ printf "Trying to load icon %s as filepath" name
-    -- Try to load the icon as a filepath
-    let nameString = T.unpack name
-    fileExists <- doesFileExist nameString
-    maybeFile <- if fileExists
-    then return $ Just nameString
-    else fmap join $ sequenceA $ getIconPathFromThemePath nameString <$> themePath
+  case themedPixbuf of
+    Just _ -> return themedPixbuf
+    Nothing -> do
+      trayLogger DEBUG $ printf "Trying to load icon %s as filepath" name
+      -- Try to load the icon as a filepath
+      let nameString = T.unpack name
+      fileExists <- doesFileExist nameString
+      maybeFile <- if fileExists
+      then return $ Just nameString
+      else fmap join $ sequenceA $ getIconPathFromThemePath nameString <$> themePath
 #if MIN_VERSION_gi_gdkpixbuf(2,0,26)
-    let handleResult = fmap join . sequenceA
+      let handleResult = fmap join . sequenceA
 #else
-    let handleResult = sequenceA
+      let handleResult = sequenceA
 #endif
-    handleResult $ safePixbufNewFromFile <$> maybeFile
+      handleResult $ safePixbufNewFromFile <$> maybeFile
 
 getIconPathFromThemePath :: String -> String -> IO (Maybe String)
 getIconPathFromThemePath name themePath = if name == "" then return Nothing else do
