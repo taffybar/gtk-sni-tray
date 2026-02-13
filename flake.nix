@@ -34,30 +34,53 @@
       overlays = lib.attrValues self.overlays;
       config.allowBroken = true;
     };
+    # `cabal run`/`cabal new-run` produces unwrapped binaries. Ensure the dev
+    # shell environment can find icon themes and gdk-pixbuf loaders (SVG via
+    # librsvg), similar to what Nix wrappers do for installed GTK apps.
+    gdkPixbufLoaders = pkgs.symlinkJoin {
+      name = "gdk-pixbuf-loaders";
+      paths = [ pkgs.gdk-pixbuf pkgs.librsvg ];
+    };
+    gdkPixbufModulesDir = "${gdkPixbufLoaders}/lib/gdk-pixbuf-2.0/2.10.0/loaders";
+    # nix-direnv does not reliably execute `shellHook`, so generate a stable
+    # loaders cache in the store and point GDK_PIXBUF_MODULE_FILE at it.
+    gdkPixbufLoadersCache = pkgs.runCommand "gdk-pixbuf-loaders.cache" {
+      nativeBuildInputs = [ pkgs.gdk-pixbuf.dev ];
+    } ''
+      export GDK_PIXBUF_MODULEDIR="${gdkPixbufModulesDir}"
+      ${pkgs.gdk-pixbuf.dev}/bin/gdk-pixbuf-query-loaders > "$out"
+    '';
   in
   {
     # Default to a "wired" Haskell shell so `cabal build` already has a package
     # database with the project's Haskell dependencies (like taffybar does).
-	    devShells.default = pkgs.haskellPackages.shellFor {
-	      packages = p: [ p.gtk-sni-tray ];
-	      buildInputs = with pkgs; [
-	        gtk3
-	        gtk-layer-shell
-	        gobject-introspection
-	        libdbusmenu-gtk3
-	        libsysprof-capture
-	        pcre2.dev
-	      ];
-		      nativeBuildInputs = (with pkgs; [
-		        pkg-config
-		        dbus
-		      ]) ++ (with pkgs.haskellPackages; [
-		        cabal-install
-		        haskell-language-server
-		      ]);
-	      shellHook = ''
-        export NIX_LDFLAGS="''${NIX_LDFLAGS:-} -fuse-ld=bfd"
-      '';
+    devShells.default = pkgs.haskellPackages.shellFor {
+      packages = p: [ p.gtk-sni-tray ];
+      buildInputs = with pkgs; [
+        gtk3
+        gtk-layer-shell
+        gobject-introspection
+        libdbusmenu-gtk3
+        libsysprof-capture
+        librsvg
+        pcre2.dev
+
+        # Ensure at least standard fallback themes exist in XDG_DATA_DIRS.
+        adwaita-icon-theme
+        hicolor-icon-theme
+      ];
+      nativeBuildInputs = (with pkgs; [
+        pkg-config
+        dbus
+      ]) ++ (with pkgs.haskellPackages; [
+        cabal-install
+        haskell-language-server
+      ]);
+
+      # Export as plain env vars so nix-direnv picks them up (no shellHook needed).
+      NIX_LDFLAGS = "-fuse-ld=bfd";
+      GDK_PIXBUF_MODULEDIR = gdkPixbufModulesDir;
+      GDK_PIXBUF_MODULE_FILE = gdkPixbufLoadersCache;
     };
 
     packages.default = pkgs.haskellPackages.gtk-sni-tray;
