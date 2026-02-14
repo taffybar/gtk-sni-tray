@@ -1,5 +1,16 @@
 # Changelog for gtk-sni-tray
 
+## 0.1.15.0
+
+- Fix: respect the user's GTK icon theme when an SNI item provides IconThemePath
+  (and handle IconThemePath values that point inside a theme directory).
+- Add icon preference support (choose themed icons vs pixmaps when both are
+  provided) and expose it in the standalone executable with `--icon-preference`.
+- Add optional icon recoloring in the standalone executable with `--icon-recolor`.
+- Nix: improve flake dev shell environment so `cabal new-run` can find icon
+  themes and gdk-pixbuf loaders.
+- Development: add `scripts/fmt` and `scripts/fmt-check` for ormolu formatting.
+
 ## 0.1.14.2
 
 - Relax executable `optparse-applicative` upper bound to `< 0.20` for GHC 9.12 snapshots.
