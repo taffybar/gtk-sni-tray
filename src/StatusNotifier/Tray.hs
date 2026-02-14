@@ -410,10 +410,18 @@ trayMatchIsMenu :: Bool -> TrayItemMatcher
 trayMatchIsMenu expected =
   mkTrayItemMatcher "is-menu" $ \info -> itemIsMenu info == expected
 
+-- | Controls whether to prefer application-provided pixmaps or themed icons
+-- when both are present. Some items provide both.
+data TrayIconPreference
+  = PreferPixmaps
+  | PreferThemedIcons
+  deriving (Eq, Show, Read)
+
 data TrayParams = TrayParams
   { trayOrientation :: Gtk.Orientation
   , trayImageSize :: TrayImageSize
   , trayIconExpand :: Bool
+  , trayIconPreference :: TrayIconPreference
   , trayAlignment :: StrutAlignment
   , trayOverlayScale :: Rational
   , trayLeftClickAction :: TrayClickAction
@@ -428,6 +436,7 @@ defaultTrayParams = TrayParams
   { trayOrientation = Gtk.OrientationHorizontal
   , trayImageSize = Expand
   , trayIconExpand = False
+  , trayIconPreference = PreferPixmaps
   , trayAlignment = End
   , trayOverlayScale = 2 % 5
   , trayLeftClickAction = Activate
@@ -459,6 +468,7 @@ buildTrayWithPriorityAndPixbufTransform Host
           TrayParams { trayOrientation = orientation
                      , trayImageSize = imageSize
                      , trayIconExpand = shouldExpand
+                     , trayIconPreference = iconPreference
                      , trayAlignment = alignment
                      , trayOverlayScale = overlayScale
                      , trayLeftClickAction = leftClickAction
@@ -830,9 +840,23 @@ buildTrayWithPriorityAndPixbufTransform Host
               if BS.length p == 0
               then return Nothing
               else getIconPixbufFromByteString w h p
+            getFromThemed =
+              if name == ""
+              then return Nothing
+              else getIconPixbufByName size (T.pack name) mpath
+            firstJustM a b = do
+              ma <- a
+              case ma of
+                Just _ -> return ma
+                Nothing -> b
+
         if null pixmaps
         then getIconPixbufByName size (T.pack name) mpath
-        else getFromPixmaps selectedPixmap
+        else case iconPreference of
+               PreferThemedIcons ->
+                 firstJustM getFromThemed (getFromPixmaps selectedPixmap)
+               PreferPixmaps ->
+                 firstJustM (getFromPixmaps selectedPixmap) getFromThemed
 
       uiUpdateHandler updateType info =
         void $ Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $

@@ -628,6 +628,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
             { trayOrientation = orientation
             , trayImageSize = Expand
             , trayIconExpand = expand
+            , trayIconPreference = PreferPixmaps
             , trayAlignment = align
             , trayOverlayScale = overlayScale
             , trayLeftClickAction = Activate
