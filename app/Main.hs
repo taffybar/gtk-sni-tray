@@ -481,6 +481,23 @@ overlayScaleP =
   <> value (5 % 7)
   )
 
+iconPreferenceP :: Parser TrayIconPreference
+iconPreferenceP =
+  option (eitherReader parsePref)
+    ( long "icon-preference"
+        <> help "Icon preference when both are provided: pixmaps (default) | themed"
+        <> value PreferPixmaps
+        <> metavar "PREFERENCE"
+    )
+  where
+    parsePref s =
+      case map toLower s of
+        "pixmaps" -> Right PreferPixmaps
+        "pixmap" -> Right PreferPixmaps
+        "themed" -> Right PreferThemedIcons
+        "theme" -> Right PreferThemedIcons
+        _ -> Left "expected one of: pixmaps, themed"
+
 iconRecolorModeP :: Parser IconRecolorMode
 iconRecolorModeP =
   option (eitherReader parseMode)
@@ -537,10 +554,11 @@ buildWindows :: StrutPosition
              -> Rational
              -> Rational
              -> MenuBackend
+             -> TrayIconPreference
              -> IconRecolorMode
              -> IO ()
 buildWindows pos align size padding monitors priority backendChoice maybeColorString expand
-             centerIcons startWatcher noStrut barLength overlayScale menuBackend iconRecolorMode = do
+             centerIcons startWatcher noStrut barLength overlayScale menuBackend iconPreference iconRecolorMode = do
   _ <- Gtk.init Nothing
   logger <- getLogger "StatusNotifier"
   saveGlobalLogger $ setLevel priority logger
@@ -628,7 +646,7 @@ buildWindows pos align size padding monitors priority backendChoice maybeColorSt
             { trayOrientation = orientation
             , trayImageSize = Expand
             , trayIconExpand = expand
-            , trayIconPreference = PreferPixmaps
+            , trayIconPreference = iconPreference
             , trayAlignment = align
             , trayOverlayScale = overlayScale
             , trayLeftClickAction = Activate
@@ -671,7 +689,7 @@ parser =
   buildWindows <$> positionP <*> alignmentP <*> sizeP <*> paddingP <*>
   monitorNumberP <*> logP <*> backendChoiceP <*> colorP <*> expandP <*>
   centerIconsP <*> startWatcherP <*>
-  noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP <*> iconRecolorModeP
+  noStrutP <*> barLengthP <*> overlayScaleP <*> menuBackendP <*> iconPreferenceP <*> iconRecolorModeP
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption
