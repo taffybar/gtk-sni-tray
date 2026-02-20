@@ -1,5 +1,14 @@
 # Changelog for gtk-sni-tray
 
+## 0.2.0.0
+
+- Breaking: remove `buildTrayWithPriority`, `buildTrayWithPixbufTransform`,
+  and `buildTrayWithPriorityAndPixbufTransform`.
+- Consolidate tray configuration into `TrayParams` with new fields:
+  `trayPriorityConfig`, `trayPixbufTransform`, and `trayEventHooks`.
+- Add click interception hooks via `TrayEventHooks`/`TrayClickHook` so callers
+  can run custom per-item behavior and choose default/override/consume.
+
 ## 0.1.15.0
 
 - Fix: respect the user's GTK icon theme when an SNI item provides IconThemePath

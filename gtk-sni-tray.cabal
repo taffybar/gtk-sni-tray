@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           gtk-sni-tray
-version:        0.1.15.0
+version:        0.2.0.0
 synopsis:       A standalone StatusNotifierItem/AppIndicator tray
 description:    Please see the README on Github at <https://github.com/IvanMalison/gtk-sni-tray#readme>
 category:       System
